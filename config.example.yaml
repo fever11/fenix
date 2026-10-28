@@ -1,0 +1,163 @@
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# =====================================================================
+#  FENIX — Ayar dosyası örneği / Example settings file
+# ---------------------------------------------------------------------
+#  TR: Bu dosyanın bir kopyasını "config.yaml" adıyla oluştur (Setup.bat
+#      bunu kendisi yapar) ve aşağıya kendi Gemini anahtarını yapıştır.
+#      config.yaml'ı KİMSEYLE PAYLAŞMA, GitHub'a YÜKLEME: içinde anahtarların var.
+#  EN: Make a copy of this file named "config.yaml" (Setup.bat / Setup does
+#      it for you) and paste your own Gemini key below.
+#      NEVER share config.yaml or upload it to GitHub: it holds your keys.
+# =====================================================================
+
+# --- DİL / LANGUAGE --------------------------------------------------
+# tr | en | de | ru | fr | es   (boş/empty = ilk açılışta sorulur / asked at first start)
+# Uygulama içinden de değiştirilebilir: ⚙️ Ayarlar / Settings → Dil / Language
+language: ""
+
+# --- API ANAHTARLARI / API KEYS --------------------------------------
+api_keys:
+  # ZORUNLU / REQUIRED — sohbet, ekran görme, hafıza / chat, screen vision, memory
+  # Ücretsiz / free: https://aistudio.google.com/apikey
+  gemini: "BURAYA_GEMINI_API_KEYINI_YAPISTIR"
+
+  # İSTEĞE BAĞLI / OPTIONAL — ikinci bir Google hesabından yedek anahtar (ayrı kota)
+  # backup key from a second Google account (separate quota)
+  gemini_yedek: ""
+
+  # İSTEĞE BAĞLI ama ÖNERİLİR / OPTIONAL but RECOMMENDED — çok hızlı sohbet + ses tanıma
+  # very fast chat + speech recognition. Free: https://console.groq.com/keys
+  # Boşsa her şey Gemini ile çalışır / if empty everything runs on Gemini.
+  groq: ""
+
+  # İSTEĞE BAĞLI / OPTIONAL — Groq dolunca yedek sohbet + son çare ekran görme
+  # backup chat when Groq runs out + last-resort screen vision. https://build.nvidia.com/settings/api-keys
+  nvidia: ""
+
+  # İSTEĞE BAĞLI / OPTIONAL — derin araştırmada daha iyi arama / better search for deep research
+  # Boşsa DuckDuckGo/Bing denenir / falls back to DuckDuckGo/Bing.
+  # https://app.tavily.com  |  https://api.search.brave.com
+  tavily: ""
+  brave: ""
+
+# --- MODLAR / MODES --------------------------------------------------
+# provider: "groq" | "nvidia" | "gemini"
+# Sıra / order:  provider "groq"   -> Groq modelleri -> NVIDIA modelleri -> Gemini
+#                provider "nvidia" -> NVIDIA -> Groq -> Gemini
+# Anahtarı olmayan sağlayıcı atlanır / providers without a key are skipped.
+# Ekran görme her zaman Gemini ile yapılır / screen vision always uses Gemini.
+modes:
+  safe:
+    label: "Güvenli"                       # arayüzde seçilen dile çevrilir / translated in the UI
+    provider: "groq"
+    groq_model: "openai/gpt-oss-20b"
+    gemini_model: "gemini-3.8-flash"
+    allow_actions: false                   # sadece sohbet / chat only
+    confirm_everything: true
+
+  normal:
+    label: "Normal"
+    provider: "groq"
+    groq_model: "openai/gpt-oss-120b"
+    gemini_model: "gemini-3.8-flash"
+    allow_actions: true                    # güvenli işlemler, riskliler için onay / asks before risky actions
+    confirm_everything: false
+
+  devil:
+    label: "Devil"
+    provider: "groq"
+    groq_model: "openai/gpt-oss-120b"
+    gemini_model: "gemini-3.8-flash"
+    allow_actions: true                    # derin araştırma, çok adımlı görevler / deep research, multi-step
+    confirm_everything: false              # kritik işlemlerde yine onay / still asks for critical actions
+
+default_mode: "normal"
+
+# Kota dolunca sırayla denenecek yedek modeller / fallback models when a quota runs out
+groq_fallbacks:
+  - "openai/gpt-oss-20b"
+  - "qwen/qwen3.8-27b"
+gemini_fallbacks:
+  - "gemini-3.6-flash"
+
+# NVIDIA (yalnızca api_keys.nvidia doluysa / only with an nvidia key)
+nvidia:
+  chat_models:                     # sohbet yedeği, sırayla denenir / chat backup, tried in order
+    - "deepseek-ai/deepseek-v4.1-flash"
+    - "nvidia/nemotron-3.5-lightning-30b-a3b"
+  timeout_seconds: 240             # ücretsiz katman yavaş olabilir / free tier can be slow
+  gorsel_model: "nvidia/nemotron-3.5-super-vl-120b-a12b"   # son çare ekran görme / last-resort vision
+
+# --- DERİN ARAŞTIRMA / DEEP RESEARCH (Devil) -------------------------
+deep_research:
+  max_pages: 12
+  extra_pages: 6
+  rounds: 3
+  parallel_fetch: 4
+  page_chars: 5000
+  fast_model: "openai/gpt-oss-20b"
+  site_max_pages: 8
+
+# --- DOSYA EKLERİ / ATTACHMENTS (📎 PDF, Word, Excel, code, images) --
+documents:
+  direct_chars: 12000
+  chunk_chars: 8000
+  max_chunks: 40
+
+# --- RAPORLAR / REPORTS (data/raporlar/) ----------------------------
+reports:
+  max_count: 100
+  max_total_mb: 50
+  compress_after_days: 7
+
+# --- SES / AUDIO -----------------------------------------------------
+audio:
+  ptt_key: "f9"                  # Bas-Konuş tuşu / push-to-talk key
+  # Ses, seçilen dile göre otomatik ayarlanır / the voice follows the chosen language automatically:
+  # tr-TR-AhmetNeural, en-US-GuyNeural, de-DE-ConradNeural, ru-RU-DmitryNeural,
+  # fr-FR-HenriNeural, es-ES-AlvaroNeural  (kadın sesi / female e.g. tr-TR-EmelNeural, en-US-JennyNeural)
+  tts_voice: "tr-TR-AhmetNeural"
+  tts_enabled: true
+  input_device: ""               # boş = Windows varsayılanı / empty = Windows default microphone
+  stt: "groq"                    # "groq" (Whisper, Groq anahtarı gerekir / needs Groq key) | "google"
+  stt_model: "whisper-large-v3-turbo"
+  sample_rate: 16000
+
+# --- EKRAN / SCREEN --------------------------------------------------
+screen:
+  hide_fenix: true               # ekran görüntüsünde FENIX penceresi gizlensin / hide FENIX in screenshots
+
+# --- ACİL KAPATMA / KILL SWITCH --------------------------------------
+killswitch:
+  hotkey: "ctrl+alt+q"
+  corner_trigger: true           # fare sol üst köşede bekletilince / mouse held in the top-left corner
+  corner_size: 5
+  corner_hold_seconds: 1.5
+
+# --- HAFIZA / MEMORY -------------------------------------------------
+memory:
+  db_path: "data/fenix_memory.db"
+  chroma_path: "data/chroma_db"
+  cross_chat: true               # önceki sohbetleri hatırla / remember earlier chats
+
+# --- TELAFFUZ / PRONUNCIATION (sadece ses / voice only) --------------
+# "yazılış": "okunuş"   e.g.  "GPU": "ci pi yu"
+pronunciation_overrides: {}
+
+# --- GÜVENLİK / SECURITY ---------------------------------------------
+security:
+  startup_watch_minutes: 30      # açılış programlarını kontrol / check startup programs (0 = off)
+  windows_notifications: true
+
+# --- NÖBET MODU / WATCH MODE (Windows, pip install pystray) ----------
+nobet:
+  etkin: true                    # kapatırken nöbet seçeneği / offer watch mode when closing
+  kapanis_tercihi: "sor"         # sor=ask | nobet=watch | kapat=quit
+  uyari_sesi: "onemli"           # onemli=important | hepsi=all | sessiz=silent
+  sessiz_saat: "23:00-08:00"     # sesli uyarı yok / no voice alerts ("" = off)
+  yan_sohbet_kisayol: "ctrl+alt+j"
+  yan_sohbet_mod: "normal"       # safe | normal
+
+# --- KOMUT HAFIZASI / COMMAND MEMORY ---------------------------------
+komut_hafizasi:
+  etkin: true                    # sık komutları yapay zekâya gitmeden çalıştır / run frequent commands locally

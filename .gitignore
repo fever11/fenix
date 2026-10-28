@@ -1,0 +1,27 @@
+# --- GİZLİ / SECRET: asla yükleme / never commit ---
+config.yaml
+*.env
+.env
+
+# --- Kişisel veriler / personal data (hafıza, sohbetler, raporlar, loglar) ---
+data/
+*.log
+*.db
+*.sqlite3
+
+# --- Python / ortam / environment ---
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+build/
+dist/
+*.spec
+
+# --- Editör ve sistem / editor & OS ---
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
