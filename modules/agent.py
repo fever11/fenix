@@ -122,6 +122,28 @@ DOSYA_ISTEGI_RE = re.compile(r"\.(docx|pdf|md|txt)\b|word belge|word dosya|pdf (
 KENDISI_RE = re.compile(r"\bkendin(i|e|den|le|izi)?\b|kendi hakkında|\bfenix\b", re.IGNORECASE)
 
 
+KENDI_KONU_RE = re.compile(r"tanıt|anlat|özellik|yapabil|mod(un|lar|ların|unu)?\b|model|gizlilik|verilerim|sınır|"
+                           r"karşılaştır|kıyasla|nesin|kimsin|kim yaptı|geliştir|sürüm|versiyon|eklenti|hafıza|"
+                           r"belge|rapor|nasıl çalış", re.IGNORECASE)
+
+
+def kendi_bilgisi(text):
+    """FENIX'in kendisiyle ilgili bir istekse fenix_hakkinda çıktısı (modele bağlam olarak verilir), değilse ''."""
+    t = text or ""
+    if not (KENDISI_RE.search(t) and KENDI_KONU_RE.search(t)):
+        return ""
+    try:
+        from . import fenix_bilgi
+        r = fenix_bilgi.fenix_hakkinda()
+    except Exception as e:
+        print(f"[KENDİNİ TANI] {e}")
+        return ""
+    if r.get("status") != "ok":
+        return ""
+    return ("[FENIX'in KENDİSİ hakkında GERÇEK bilgiler — kendinle ilgili her şeyi SADECE bunlara göre yaz; burada "
+            "olmayanı uydurma, 'emin değilim' de]\n" + r["message"])
+
+
 def kendi_belgesi_istegi(text):
     """'Kendini tanıtan bir Word belgesi oluştur' gibi istekler web araştırması değil, araçlı iş: derin araştırma
     hattı dosya yazamıyor ve uzun talimatı yanlış sorgulara çeviriyordu (04.11)."""
@@ -724,6 +746,12 @@ class Agent:
         if yol_ipucu:
             memory_context = (memory_context + "\n\n" + yol_ipucu).strip()
             self.notify("🧭 Yol hafızası: " + yol_ipucu.splitlines()[-1][:140])
+        # Kendini tanı: FENIX'in kendisi soruluyorsa gerçek bilgiler doğrudan eklenir (modelin aracı çağırmasına
+        # güvenilmez; 04.11 testinde araç vardı ama çağrılmadı, modlar yine uyduruldu)
+        oz = kendi_bilgisi(user_text)
+        if oz:
+            memory_context = (oz + "\n\n" + memory_context).strip()
+            self.notify("🪪 Kendi bilgilerime baktım (sürüm, modlar, modeller, gizlilik)")
         self.llm._extra_tools = set(yol_araclar)
         t0 = time.time()
         try:

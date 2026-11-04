@@ -18,6 +18,10 @@
   Kendisi sorulunca ya da kendini anlatan belge istenince model önce bunu çağırır; orada olmayan için "emin değilim"
   der. (04.11 testinde modları dosya adlarıyla karıştırıyor, "OpenAI/Claude ile çalışırım", "veriler dışarı çıkmaz"
   diyordu.) Uzun belgelerde "önce bilgiyi topla, sonra tek seferde yaz" kuralı eklendi.
+- **TR:** Kendisi sorulunca bu bilgiler modele doğrudan verilir (aracı çağırmasına güvenilmez); görev panelinde
+  "🪪 Kendi bilgilerime baktım" görünür.
+- **TR:** Uzun, çok bölümlü isteklerde araçlar yalnızca asıl görev cümlesine göre seçilir: 11 bölümlü belge isteğinde
+  33 yerine 13 araç gider, istek boyutu ~%25 küçülür (Groq dakika sınırında daha az bekleme).
 - **EN:** Self-knowledge: new `fenix_hakkinda` tool reports FENIX's real current state (version, modes, models,
   tools, memory, plugins, UI, privacy, limits); the model must use it instead of guessing.
 - **TR:** Word/PDF: `write_file` .docx/.pdf'i artık gerçek belge olarak yazar (önceden düz metin yazıp "dosya bozuk"

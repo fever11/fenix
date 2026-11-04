@@ -436,6 +436,8 @@ class LLMClient:
 
     # Her istekte 20 aracın tamamını göndermek ~2500 token tutuyor; Groq ücretsiz katmanında dakikalık
     # token sınırını hızla dolduruyordu. İsteğe göre ilgili araç grupları seçilir.
+    _UZUN_ISTEK = 700
+    _GOREV_BASI = 350
     _CORE_TOOLS = {"open_app_by_name", "open_url", "open_folder_by_name", "run_command", "search_web",
                    "look_at_screen", "write_file"}
     _TOOL_GROUPS = [
@@ -498,6 +500,12 @@ class LLMClient:
     def _select_tools(self, mode_key, mode_cfg, text):
         """Mesaja göre gönderilecek araç adları (+ bu sohbette son kullanılan araçlar, 'evet yap' gibi devamlar için)."""
         t = (text or "").lower()
+        if len(t) > self._UZUN_ISTEK:
+            # Uzun, çok bölümlü isteklerde (ör. 11 bölümlü belge) bölüm açıklamalarındaki her kelime ('hatırlatma',
+            # 'güvenlik', 'ses') ayrı araç grubunu tetikleyip 33 aracı birden gönderiyordu (~15 bin karakter, her
+            # adımda Groq dakika sınırı). Araçlar yalnızca asıl görev cümlesine (baştaki kısım) göre seçilir.
+            m = re.search(r"(?m)^\s*(\d{1,2}[.)]|[-•*])\s+\S", t)     # ilk madde/bölüm satırından önceki kısım
+            t = t[:min(m.start() if m and m.start() > 20 else self._GOREV_BASI, self._GOREV_BASI)]
         names = set(self._CORE_TOOLS)
         for pat, group in self._TOOL_GROUPS:
             if re.search(pat, t):
