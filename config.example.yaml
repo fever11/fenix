@@ -161,3 +161,23 @@ nobet:
 # --- KOMUT HAFIZASI / COMMAND MEMORY ---------------------------------
 komut_hafizasi:
   etkin: true                    # sık komutları yapay zekâya gitmeden çalıştır / run frequent commands locally
+
+# --- Eklentiler (MCP) / plugins -------------------------------------------------------------------------------
+# MCP, yapay zekâ asistanlarını dış araçlara bağlayan ortak bir standarttır. Buraya yazılan sunucular FENIX açılınca
+# arka planda başlar ve araçları FENIX'e eklenir. Önce Eklentileri_Kur.bat'ı bir kez çalıştır.
+# Salt okunur araçlar onaysız çalışır; yazma/silme yapan HER araç onay kutusu açar ('onay: her_zaman' -> hepsi sorar).
+# Bu bölüm hiç yoksa aşağıdaki üçü kullanılır. Hepsini kapatmak için:  eklentiler: false
+# Yer tutucular: {python} {masaustu} {belgeler} {fenix}.  Bir eklentiyi kapatmak için: aktif: false
+# MCP servers listed here start in the background; read-only tools run directly, every other tool asks first.
+eklentiler:
+  - ad: zaman                       # saat dilimi çevirme / time zones
+    komut: ["{python}", "-m", "mcp_server_time"]
+  - ad: git                         # proje geçmişi, değişiklikler, commit (Git kurulu olmalı / needs Git)
+    komut: ["{python}", "-m", "mcp_server_git"]
+  - ad: dosyalar                    # Masaüstü ve Belgeler'de klasör ağacı, taşıma... (Node.js gerekli / needs Node.js)
+    komut: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "{masaustu}", "{belgeler}"]
+  # Anahtar isteyen eklentilerde anahtarı ikinci kez yazma: {anahtar:ad} yukarıdaki api_keys'ten okunur.
+  # For plugins that need a key, {anahtar:name} is read from api_keys above. Example / örnek:
+  # - ad: tavily
+  #   komut: ["npx", "-y", "tavily-mcp"]
+  #   ortam: {TAVILY_API_KEY: "{anahtar:tavily}"}

@@ -15,6 +15,7 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
 build/
 dist/
 *.spec
@@ -25,3 +26,20 @@ dist/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# --- Özel sürüm / private build (öğrenme modu): GitHub'a ve paylaşılan pakete girmez ---
+modules/lab.py
+modules/lab_nvidia.py
+modules/saglayicilar.py
+modules/ogrenme.py
+scripts/import_jarvis.py
+Import_JARVIS.bat
+docs/OZEL_SURUM.md
+scripts/kanit_testi.py
+scripts/kanit_seti.py
+Kanit_Testi.bat
+scripts/ogrenme_deneyi.py
+scripts/egitim_seti.py
+Ogrenme_Deneyi.bat
+scripts/hiz_deneyi.py
+Hiz_Deneyi.bat

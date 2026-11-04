@@ -11,6 +11,7 @@ Unos **15 minutos**. No hace falta saber de informática; sigue los pasos en ord
 | Clave | Clave de API de Gemini (gratis, obligatoria) |
 | Opcional | Clave de API de Groq (gratis; chat más rápido y mejor reconocimiento de voz) |
 | Opcional | Clave de API de NVIDIA (gratis; chat de respaldo cuando Groq se agota) — https://build.nvidia.com |
+| Opcional | Clave de API de Tavily (cuota mensual gratuita; mejor búsqueda web) — https://app.tavily.com |
 
 ## 1. Descarga FENIX
 

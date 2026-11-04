@@ -67,6 +67,8 @@ Write-Host "  [3/4] $($M.pkgs)"
 & $vpy -m pip install --upgrade pip --quiet
 & $vpy -m pip install -r requirements.txt
 if ($LASTEXITCODE -ne 0) { Write-Host ""; Write-Host "  [!] $($M.pkgfail)" -ForegroundColor Red; Read-Host "  $($M.press)" | Out-Null; exit 1 }
+# Python dosyalari onceden derlenir: ilk acilis daha hizli / precompile for a faster first start
+& $vpy -m compileall -q app.py nobet_main.py modules | Out-Null
 
 # ---- 4) Ayarlar + kısayol / settings + shortcut ----
 Write-Host "  [4/4] ..."

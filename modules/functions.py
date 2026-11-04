@@ -162,9 +162,15 @@ RISKY_PATTERNS = [
 ]
 
 
+# PowerShell'in kısa adları (alias): "rm", "ri", "kill", "spps" de silme/sonlandırma yapar. Önceden yalnızca uzun
+# adlar tanındığı için "rm dosya.txt" onay sorulmadan çalışabiliyordu (otomatik testler yakaladı).
+_RISKY_ALIAS_RE = re.compile(r"(?:^|[\s;|&(`{])(?:rm|ri|rmdir|rd|del|erase|kill|spps|rni)(?=\s|$|;|\|)", re.IGNORECASE)
+
+
 def _is_risky(command: str) -> bool:
     c = command.lower()
-    return any(p in c for p in RISKY_PATTERNS)
+    return (any(p in c for p in RISKY_PATTERNS) or "remove-" in c or "clear-content" in c
+            or bool(_RISKY_ALIAS_RE.search(command)))
 
 
 def _safe_speak(text):
@@ -874,6 +880,19 @@ def write_file(path: str, content: str, overwrite: bool = False):
             return {"status": "cancelled", "message": "Kullanıcı onaylamadı."}
     elif outside and not _confirm("Kullanıcı klasörü dışına dosya yazılacak", os.path.basename(path), f"Yol:\n{path}"):
         return {"status": "cancelled", "message": "Kullanıcı onaylamadı."}
+    ext = os.path.splitext(path)[1].lower()
+    if ext in (".docx", ".pdf"):
+        # Word/PDF düz metin olarak yazılırsa dosya bozuk açılır: içerik Markdown kabul edilip gerçek belgeye çevrilir.
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            from . import report_export
+            md = (content or "").replace("\\n", "\n")         # model bazen satır sonunu kaçışlı yazıyor
+            (report_export.export_docx if ext == ".docx" else report_export.export_pdf)(md, path)
+        except Exception as e:
+            report_error("belge yazma", f"{path}: {e}")
+            return {"status": "error", "message": GENERIC_ERROR}
+        _notify(f"Belge oluşturuldu: {path}")
+        return {"status": "ok", "yol": path, "bicim": ext[1:], "boyut": _fmt_size(os.path.getsize(path))}
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         from . import imza
@@ -2009,7 +2028,9 @@ NEW_SCHEMAS = [
          "required": ["path", "old_text"]}},
     {"name": "write_file",
      "description": ("Yeni dosya oluşturur ve içine yazar (kod, not, ödev taslağı). Varsayılan yer Masaüstü. Var olan "
-                     "dosyanın üzerine yazmak için overwrite=true gerekir ve kullanıcıdan onay istenir."),
+                     "dosyanın üzerine yazmak için overwrite=true gerekir ve kullanıcıdan onay istenir. WORD ve PDF "
+                     "belgesi de oluşturur: yol .docx ya da .pdf ile bitsin, content Markdown olsun (# başlık, - madde, "
+                     "| tablo |, **kalın**); program onu gerçek Word/PDF belgesine çevirir."),
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string", "description": "Dosya adı ya da yol (ör. 'masaüstü/odev/rapor.md')"},
          "content": {"type": "string"}, "overwrite": {"type": "boolean"}}, "required": ["path", "content"]}},

@@ -92,7 +92,8 @@ def chat(model, messages, temperature=0.3, max_tokens=8000, timeout=(15, 90), ex
         _pause[model] = time.time() + wait
         raise RuntimeError(f"NVIDIA sınırı ({model}, {int(wait)} sn)")
     if r.status_code in (401, 403):
-        for m in set(CFG.values()) - {CFG["key"]}:
+        models = {CFG["gorsel"], model, *CFG["chat"]}     # CFG["chat"] bir liste: set() içine doğrudan konamaz
+        for m in models:
             _pause[m] = time.time() + 6 * 3600
         _note("NVIDIA anahtarı reddedildi (401/403); config.yaml'daki api_keys.nvidia değerini kontrol et")
         raise RuntimeError("NVIDIA anahtarı reddedildi")

@@ -11,6 +11,7 @@ Takes about **15 minutes**. No technical knowledge needed; just follow the steps
 | Key | Gemini API key (free, required) |
 | Optional | Groq API key (free; faster chat and better speech recognition) |
 | Optional | NVIDIA API key (free; backup chat when Groq runs out) — https://build.nvidia.com |
+| Optional | Tavily API key (free monthly quota; better web search) — https://app.tavily.com |
 
 ## 1. Download FENIX
 

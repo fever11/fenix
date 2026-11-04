@@ -1,0 +1,4 @@
+# Eklentiler (MCP) için: Eklentileri_Kur.bat bunları kurar. FENIX bunlar olmadan da çalışır (eklentiler kapalı kalır).
+mcp>=2.3,<3
+mcp-server-time
+mcp-server-git

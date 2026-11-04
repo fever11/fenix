@@ -25,10 +25,12 @@ import datetime
 
 from . import web_analyzer as wa
 from .research import DeepResearch, Cancelled
+from . import mod_onerisi
 from . import attachments as att
 from . import macros
 from . import functions as fx
 from . import command_memory as cm
+from . import yol_hafizasi as yh
 
 
 URL_RE = re.compile(r"(https?://[^\s]+|\b[\w\-]+\.(com|net|org|io|dev|tr|gov|edu|co)[^\s]*)", re.IGNORECASE)
@@ -115,9 +117,22 @@ def wants_retry(text):
     return len(t) < 60 and any(w in t for w in RETRY_WORDS)
 
 
+DOSYA_ISTEGI_RE = re.compile(r"\.(docx|pdf|md|txt)\b|word belge|word dosya|pdf (olarak|dosya|belge)|"
+                             r"belge(si|yi)? oluştur|dosya(sı|yı)? oluştur", re.IGNORECASE)
+KENDISI_RE = re.compile(r"\bkendin(i|e|den|le|izi)?\b|kendi hakkında|\bfenix\b", re.IGNORECASE)
+
+
+def kendi_belgesi_istegi(text):
+    """'Kendini tanıtan bir Word belgesi oluştur' gibi istekler web araştırması değil, araçlı iş: derin araştırma
+    hattı dosya yazamıyor ve uzun talimatı yanlış sorgulara çeviriyordu (04.11)."""
+    return bool(DOSYA_ISTEGI_RE.search(text or "") and KENDISI_RE.search(text or ""))
+
+
 def wants_deep_research(text):
     """Ön eleme: araştırmayla ilgili bir kelime geçiyor mu? (Kesin karar classify ile verilir.)"""
     t = text.lower()
+    if kendi_belgesi_istegi(text):
+        return False
     return any(w in t for w in RESEARCH_WORDS)
 
 
@@ -530,8 +545,73 @@ class Agent:
 
     # ------------------------------------------------------------------
     def handle(self, user_text, mode_key, mode_cfg, force_screen=False, attachments=None):
-        """Girdiyi işleyip metin cevabı döner. UI bunu worker thread'de çağırır."""
-        # 0) Ekli dosyalar varsa önce onlar.
+        """Girdiyi işleyip metin cevabı döner. UI bunu worker thread'de çağırır. Her cevap, hangi yoldan
+        gelirse gelsin ortak sohbet kaydına yazılır: sonraki mesaj (başka modda/yolda olsa da) onu görür."""
+        try:
+            self.llm._son_kaynak = None
+        except Exception:
+            pass
+        bekleyen, self._bekleyen_mod = getattr(self, "_bekleyen_mod", None), None
+        reddedilen = self.__dict__.setdefault("_reddedilen_mod", {})
+        if bekleyen and mod_onerisi.red_mi(user_text):
+            reddedilen[bekleyen["mod"]] = time.time()
+            if bekleyen.get("once"):                     # "önce sorayım"a hayır: asıl istek bu modda yapılır
+                user_text = bekleyen["metin"]
+        elif not attachments:
+            on = mod_onerisi.on_oneri(user_text, mode_key, reddedilen)
+            if on:
+                self._bekleyen_mod = dict(on, metin=user_text, zaman=time.time(), once=True)
+                return mod_onerisi.on_soru_metni(on, mode_key)
+        r = self._handle_ic(user_text, mode_key, mode_cfg, force_screen=force_screen, attachments=attachments)
+        try:
+            r = self._mod_oner(user_text, mode_key, r)
+        except Exception as e:
+            print(f"[MOD ÖNERİSİ] {e}")
+        try:
+            metin = r.get("text") if isinstance(r, dict) else r
+            if isinstance(metin, str) and hasattr(self.llm, "ortak_kaydet"):
+                self.llm.ortak_kaydet(user_text, metin, kaynak=getattr(self.llm, "_son_kaynak", None))
+        except Exception as e:
+            print(f"[ORTAK SOHBET] {e}")
+        return r
+
+    def _mod_oner(self, user_text, mode_key, r):
+        """İş seçili moda göre büyükse cevabın sonuna mod önerisi eklenir (kullanıcı 'evet' derse uygulama geçer)."""
+        metin = r.get("text") if isinstance(r, dict) else r
+        if not isinstance(metin, str) or not metin.strip():
+            return r
+        oneri = mod_onerisi.oner(user_text, mode_key, metin, getattr(self.llm, "last_calls", []) or [],
+                                 reddedilen=getattr(self, "_reddedilen_mod", {}))
+        if not oneri:
+            return r
+        self._bekleyen_mod = dict(oneri, metin=user_text, zaman=time.time())
+        ek = mod_onerisi.oneri_metni(oneri)
+        if isinstance(r, dict):
+            return dict(r, text=metin + ek)
+        return metin + ek
+
+    def mod_gecisi(self, user_text):
+        """Bekleyen bir mod önerisine 'evet' dendiyse -> {"mod", "sebep", "metin"} (uygulama moda geçip asıl
+        isteği orada yeniden çalıştırır). Aksi halde None."""
+        b = getattr(self, "_bekleyen_mod", None)
+        if not b or not mod_onerisi.onay_mi(user_text):
+            return None
+        self._bekleyen_mod = None
+        if time.time() - b.get("zaman", 0) > mod_onerisi.GECERLILIK_SN:
+            return None
+        return {"mod": b["mod"], "sebep": b["sebep"], "metin": b["metin"]}
+
+    def _handle_ic(self, user_text, mode_key, mode_cfg, force_screen=False, attachments=None):
+        # 0) Özel sürüm: öğrenme komutları ve 'öğren' denilen belgeler (modül yoksa atlanır)
+        try:
+            from . import ogrenme
+        except ImportError:
+            ogrenme = None
+        if ogrenme:
+            r = ogrenme.agent_pre(self, user_text, mode_key, mode_cfg, attachments)
+            if r is not None:
+                return r
+        # 0b) Ekli dosyalar varsa önce onlar.
         if attachments:
             try:
                 return self._handle_attachments(user_text, attachments, mode_key, mode_cfg)
@@ -634,7 +714,33 @@ class Agent:
                            "ilgili bir şey sorduysa bunu kısaca söyle; değilse soruyu normal cevapla.]")
 
         self._stage("Yanıt hazırlanıyor")
-        answer = self.llm.ask(mode_key, mode_cfg, message, memory_context=memory_context)
+        # Yol hafızası: benzer işte izlenen yol ve bilinen proje klasörü ipucu olarak eklenir (hiçbir şey otomatik çalışmaz)
+        yol_ipucu, yol_araclar = "", set()
+        if not want_screen:
+            try:
+                yol_ipucu, yol_araclar = yh.ipucu(user_text)
+            except Exception as e:
+                print(f"[YOL HAFIZASI] {e}")
+        if yol_ipucu:
+            memory_context = (memory_context + "\n\n" + yol_ipucu).strip()
+            self.notify("🧭 Yol hafızası: " + yol_ipucu.splitlines()[-1][:140])
+        self.llm._extra_tools = set(yol_araclar)
+        t0 = time.time()
+        try:
+            answer = self.llm.ask(mode_key, mode_cfg, message, memory_context=memory_context)
+        finally:
+            self.llm._extra_tools = set()
+        calls = list(getattr(self.llm, "last_calls", []) or [])
+        incog = bool(getattr(self.memory, "incognito", False))
+        if not incog:
+            yh.olcum_yaz(user_text, time.time() - t0, calls, bool(yol_ipucu))
+        _t = str(answer.get("text") if isinstance(answer, dict) else answer)
+        bitti = "çok adım sürdü" not in _t and "Adım sınırına ulaşıldı" not in _t
+        if calls and not want_screen and bitti:          # yarıda kalan işin yolu öğrenilmez
+            try:
+                yh.ogren(user_text, calls, incognito=incog)
+            except Exception as e:
+                print(f"[YOL HAFIZASI] {e}")
         if want_screen:
             try:
                 self.llm.compact_last_user(mode_key, f"{user_text}\n[Ekrana bakıldı]")

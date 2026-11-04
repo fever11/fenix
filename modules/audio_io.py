@@ -13,8 +13,24 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import sounddevice as sd
 import keyboard
-import edge_tts
-import pygame
+
+
+class _Lazy:
+    """Ağır ses kütüphaneleri (edge_tts ~0,3 sn, pygame ~0,5 sn) açılışı yavaşlatmasın: ilk kullanımda yüklenir."""
+    def __init__(self, name):
+        self._name, self._mod = name, None
+
+    def __getattr__(self, attr):
+        if self._mod is None:
+            import importlib
+            if self._name == "pygame":
+                os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+            self._mod = importlib.import_module(self._name)
+        return getattr(self._mod, attr)
+
+
+edge_tts = _Lazy("edge_tts")
+pygame = _Lazy("pygame")
 
 def _fire(cb):
     if not cb:

@@ -45,6 +45,15 @@ from modules import nobet
 from modules.version import VERSION as FENIX_VERSION
 from modules import i18n
 from modules import imza
+try:                                   # özel sürüm: öğrenme modu (paylaşılan pakette bu modül yoktur)
+    from modules import ogrenme as OGR
+    OGR.install()
+except ImportError:
+    OGR = None
+from modules import mcp_eklenti as MCPX     # eklentiler (MCP); 'mcp' paketi yoksa kendiliğinden kapalı kalır
+from modules import yol_hafizasi as YOLH     # yol hafızası: benzer işlerde izlenen yolu hatırlar
+from modules import fenix_bilgi as FBILGI   # kendini tanı: FENIX kendisi hakkında gerçek bilgileri buradan okur
+MCPX.install()
 
 try:                                   # sürükle-bırak (pip install tkinterdnd2); yoksa sadece 📎 butonu
     from tkinterdnd2 import TkinterDnD, DND_FILES
@@ -52,27 +61,48 @@ try:                                   # sürükle-bırak (pip install tkinterdn
 except Exception:
     TkinterDnD, DND_FILES, _DND_BASES = None, None, ()
 
-# --- Renk paleti ---
-BG = "#0a0f1d"
-PANEL = "#111827"
-PANEL2 = "#0d1424"
-EMERALD = "#10b981"
-CYAN = "#06b6d4"
-AMBER = "#f59e0b"
-TEXT = "#e5e7eb"
-MUTED = "#6b7280"
+# --- Renk paleti (holografik tema) ---
+BG = "#04070d"
+PANEL = "#060c16"
+PANEL2 = "#0b1522"
+LINE = "#16324a"            # ince çerçeve / ayraç çizgileri
+GRID = "#0a1825"            # merkezdeki ızgara
+EMERALD = "#38bdf8"
+CYAN = "#7dd3fc"
+AMBER = "#fbbf24"
+TEXT = "#dbe7f3"
+MUTED = "#8aa0b6"
+FONT_HEAD = "Bahnschrift"   # Windows 10/11'de hazır gelen teknik görünümlü yazı tipi (yoksa varsayılana düşer)
+FONT_MONO = "Consolas"
 
 # Mod renkleri: canlı mod göstergeleri (küre, pipeline, mod butonu, FENIX yazısı) moda göre değişir.
 # Güvenli = mavi (sakin/salt-okunur), Normal = yeşil (şimdiki hâl), Devil = kırmızı (tam yetki, dikkat).
 MODE_ACCENT = {
-    "safe":   {"base": "#3b82f6", "light": "#60a5fa", "hover": "#2563eb"},
-    "normal": {"base": EMERALD,    "light": CYAN,      "hover": CYAN},
-    "devil":  {"base": "#ef4444", "light": "#f87171", "hover": "#dc2626"},
+    "safe":   {"base": "#818cf8", "light": "#a5b4fc", "hover": "#6366f1"},
+    "normal": {"base": "#38bdf8", "light": "#7dd3fc", "hover": "#0ea5e9"},
+    "devil":  {"base": "#f87171", "light": "#fca5a5", "hover": "#ef4444"},
 }
+if OGR:
+    MODE_ACCENT.update(OGR.MODE_ACCENT)
+MODE_KEYS = ("safe", "normal", "devil") + ((OGR.MODE_KEY,) if OGR else ())
 
 _THEME = {"base": EMERALD, "hover": CYAN}      # yan pencereler açılırken o anki modun rengini alır
 
 ctk.set_appearance_mode("dark")
+# Holografik tema: keskin köşeler, ince çerçeveler (tüm pencerelerdeki varsayılanlar)
+try:
+    _T = ctk.ThemeManager.theme
+    for _w, _r in (("CTkButton", 4), ("CTkEntry", 4), ("CTkTextbox", 4), ("CTkSegmentedButton", 4),
+                   ("CTkOptionMenu", 4), ("CTkComboBox", 4), ("CTkFrame", 6)):
+        if _w in _T:
+            _T[_w]["corner_radius"] = _r
+    _T["CTkButton"]["border_width"] = 1
+    _T["CTkButton"]["border_color"] = ["#16324a", "#16324a"]
+    _T["CTkEntry"]["border_color"] = ["#16324a", "#16324a"]
+    _T["CTkTextbox"]["border_width"] = 1
+    _T["CTkTextbox"]["border_color"] = ["#16324a", "#16324a"]
+except Exception as _e:
+    print(f"[TEMA] {_e}")
 
 
 def load_config(path="config.yaml"):
@@ -158,6 +188,21 @@ class SettingsWindow(ReadOnlyWindow):
                                            fg_color=PANEL2, button_color=PANEL, button_hover_color=CYAN)
         self.lang_menu.set(i18n.LANGS[i18n.lang()])
         self.lang_menu.pack(side="left", padx=(8, 0))
+        row2 = ctk.CTkFrame(self, fg_color="transparent")
+        row2.pack(fill="x", padx=12, pady=(8, 0), before=self.box)
+        self.sw_yol = ctk.CTkSwitch(row2, text="🧭 Yol hafızası (benzer işleri daha hızlı yapar)",
+                                    command=lambda: user_settings.set("yol_hafizasi", bool(self.sw_yol.get())),
+                                    font=("Segoe UI", 12), text_color=TEXT)
+        if user_settings.get("yol_hafizasi", True):
+            self.sw_yol.select()
+        self.sw_yol.pack(anchor="w")
+        self.sw_bildirim = ctk.CTkSwitch(row2, text="🔔 Başka penceredeyken cevap gelince bildirim göster",
+                                         command=lambda: user_settings.set("cevap_bildirimi",
+                                                                           bool(self.sw_bildirim.get())),
+                                         font=("Segoe UI", 12), text_color=TEXT)
+        if user_settings.get("cevap_bildirimi", True):
+            self.sw_bildirim.select()
+        self.sw_bildirim.pack(anchor="w", pady=(6, 0))
 
     def _on_lang(self, name):
         code = self._codes[[i18n.LANGS[c] for c in self._codes].index(name)]
@@ -167,6 +212,239 @@ class SettingsWindow(ReadOnlyWindow):
         from tkinter import messagebox
         messagebox.showinfo("FENIX", "Dil kaydedildi. Değişikliğin uygulanması için FENIX'i yeniden başlat.\n\n"
                                      "Language saved. Restart FENIX to apply it.", parent=self)
+
+
+class PluginsWindow(ctk.CTkToplevel):
+    """🧩 Eklentiler (MCP): aç/kapat, anahtar gir, Uygula. config.yaml'ı elle düzenlemek gerekmez."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.app = app
+        self._alive = True
+        self.title("FENIX • Eklentiler")
+        self.geometry("680x640")
+        self.minsize(520, 420)
+        self.configure(fg_color=BG)
+        self.protocol("WM_DELETE_WINDOW", self.close)
+        ctk.CTkLabel(self, text="Eklentiler (MCP)", text_color=TEXT, font=(FONT_HEAD, 16)).pack(
+            anchor="w", padx=14, pady=(12, 0))
+        ctk.CTkLabel(self, text="Açmak istediğin eklentiyi işaretle, gerekiyorsa anahtarını yapıştır ve Uygula'ya bas. "
+                                "Yazma/silme yapan her eklenti işlemi yine onay kutusuyla sorulur.",
+                     text_color=MUTED, font=("Segoe UI", 11), wraplength=630, justify="left").pack(
+            anchor="w", padx=14, pady=(2, 6))
+        # uyarı satırının yeri: liste kutusunun hemen üstü (CTkScrollableFrame'e 'before=' verilemiyor)
+        self.warn_slot = ctk.CTkFrame(self, fg_color="transparent", height=0)
+        self.warn_slot.pack(fill="x", padx=12)
+        self.warn = ctk.CTkFrame(self.warn_slot, fg_color=PANEL2, border_width=1, border_color=AMBER)
+        self.warn_label = ctk.CTkLabel(self.warn, text="Bazı eklentiler için gereken paketler kurulu değil.",
+                                       text_color=AMBER, font=("Segoe UI", 11))
+        self.warn_label.pack(side="left", padx=10, pady=8)
+        self.install_btn = ctk.CTkButton(self.warn, text="Paketleri kur", width=120, command=self._install)
+        self.install_btn.pack(side="right", padx=10, pady=8)
+        self.list = ctk.CTkScrollableFrame(self, fg_color=PANEL)
+        self.list.pack(fill="both", expand=True, padx=12, pady=(4, 6))
+        bar = ctk.CTkFrame(self, fg_color="transparent")
+        bar.pack(fill="x", padx=12, pady=(0, 12))
+        self.status = ctk.CTkLabel(bar, text="", text_color=MUTED, font=("Segoe UI", 11), anchor="w")
+        self.status.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(bar, text="Kapat", width=80, fg_color=PANEL2, hover_color=CYAN, command=self.close).pack(
+            side="right", padx=(6, 0))
+        self.apply_btn = ctk.CTkButton(bar, text="Uygula", width=100, command=self._apply)
+        self.apply_btn.pack(side="right")
+        self.rows = {}
+        self._build()
+        self.after(1500, self._tick)
+
+    def _build(self):
+        try:
+            self._build_inner()
+        except Exception as ex:
+            import traceback
+            try:
+                with open(os.path.join("data", "hatalar.log"), "a", encoding="utf-8") as f:
+                    f.write(f"\n[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] Eklentiler penceresi\n{traceback.format_exc()}")
+            except Exception:
+                pass
+            self.status.configure(text=f"Liste gösterilemedi: {ex}", text_color=AMBER)
+
+    def _build_inner(self):
+        for w in self.list.winfo_children():
+            w.destroy()
+        self.rows = {}
+        liste = MCPX.liste(self.app.cfg)
+        paket_eksik = not MCPX.available() or any("paketi kurulu değil" in x for e in liste
+                                                  for x in MCPX.eksikler(e, self.app.cfg))
+        if paket_eksik:
+            self.warn.pack(fill="x", pady=(0, 4))
+        else:
+            self.warn.pack_forget()
+        for e in liste:
+            try:
+                self._row(e)
+            except Exception as ex:          # bir satır bozuk olsa da diğerleri görünsün
+                ctk.CTkLabel(self.list, text=f"{e.get('ad')}: gösterilemedi ({ex})", text_color=AMBER).pack(anchor="w")
+        self._add_form()
+        self._refresh_status()
+
+    def _row(self, e):
+        import webbrowser
+        fr = ctk.CTkFrame(self.list, fg_color=PANEL2, border_width=1, border_color=LINE)
+        fr.pack(fill="x", padx=4, pady=4)
+        top = ctk.CTkFrame(fr, fg_color="transparent")
+        top.pack(fill="x", padx=10, pady=(8, 0))
+        sw = ctk.CTkSwitch(top, text=e.get("baslik") or e["ad"], font=("Segoe UI", 13), text_color=TEXT,
+                           progress_color=self.app._accent())
+        if e.get("aktif"):
+            sw.select()
+        sw.pack(side="left")
+        st = ctk.CTkLabel(top, text="", text_color=MUTED, font=("Segoe UI", 11))
+        st.pack(side="right")
+        if e.get("aciklama"):
+            ctk.CTkLabel(fr, text=e["aciklama"], text_color=MUTED, font=("Segoe UI", 11), wraplength=600,
+                         justify="left").pack(anchor="w", padx=12)
+        entry = None
+        if e.get("anahtar") or e.get("indir_url"):
+            kr = ctk.CTkFrame(fr, fg_color="transparent")
+            kr.pack(fill="x", padx=10, pady=(4, 0))
+            if e.get("anahtar"):
+                var = str((self.app.cfg.get("api_keys") or {}).get(e["anahtar"]) or "").strip()
+                has = bool(var) and not var.startswith("BURAYA")
+                entry = ctk.CTkEntry(kr, show="•", width=300,
+                                     placeholder_text="anahtar girilmiş (değiştirmek için yapıştır)" if has
+                                     else "anahtarı buraya yapıştır")
+                entry.pack(side="left")
+                if e.get("anahtar_url"):
+                    ctk.CTkButton(kr, text="Anahtar al", width=90, fg_color=PANEL, hover_color=CYAN,
+                                  command=lambda u=e["anahtar_url"]: webbrowser.open(u)).pack(side="left", padx=6)
+            if e.get("indir_url"):
+                ctk.CTkButton(kr, text="İndir", width=70, fg_color=PANEL, hover_color=CYAN,
+                              command=lambda u=e["indir_url"]: webbrowser.open(u)).pack(side="left")
+        if e.get("ipucu"):
+            ctk.CTkLabel(fr, text=e["ipucu"], text_color=MUTED, font=("Segoe UI", 10), wraplength=600,
+                         justify="left").pack(anchor="w", padx=12)
+        if e.get("kaynak") == "ozel":
+            ctk.CTkButton(fr, text="Kaldır", width=70, fg_color=PANEL, hover_color="#7f1d1d",
+                          command=lambda a=e["ad"]: self._remove(a)).pack(anchor="e", padx=10, pady=(4, 0))
+        ctk.CTkFrame(fr, fg_color="transparent", height=6).pack()
+        self.rows[e["ad"]] = {"e": e, "switch": sw, "status": st, "entry": entry}
+
+    def _add_form(self):
+        fr = ctk.CTkFrame(self.list, fg_color=PANEL2, border_width=1, border_color=LINE)
+        fr.pack(fill="x", padx=4, pady=(10, 4))
+        ctk.CTkLabel(fr, text="➕ Kendi eklentini ekle", text_color=TEXT, font=("Segoe UI", 13)).pack(
+            anchor="w", padx=12, pady=(8, 0))
+        ctk.CTkLabel(fr, text="Eklentinin sayfasında genelde 'npx -y paket-adi' gibi bir satır olur; paket adını yaz. "
+                              "Anahtar istiyorsa sayfada yazan değişken adını da gir (ör. SPOTIFY_TOKEN). Kendi "
+                              "eklediğin eklentilerin her işlemi onay ister. Sadece güvendiğin eklentileri ekle.",
+                     text_color=MUTED, font=("Segoe UI", 10), wraplength=600, justify="left").pack(anchor="w", padx=12)
+        row = ctk.CTkFrame(fr, fg_color="transparent")
+        row.pack(fill="x", padx=10, pady=6)
+        self.f_ad = ctk.CTkEntry(row, width=120, placeholder_text="ad (ör. spotify)")
+        self.f_ad.pack(side="left")
+        self.f_paket = ctk.CTkEntry(row, width=230, placeholder_text="npm paketi (ör. @firma/mcp-server)")
+        self.f_paket.pack(side="left", padx=6)
+        self.f_env = ctk.CTkEntry(row, width=150, placeholder_text="anahtar değişkeni (isteğe bağlı)")
+        self.f_env.pack(side="left")
+        ctk.CTkButton(row, text="Ekle", width=60, command=self._add_custom).pack(side="left", padx=6)
+        self.f_msg = ctk.CTkLabel(fr, text="", text_color=AMBER, font=("Segoe UI", 10))
+        self.f_msg.pack(anchor="w", padx=12, pady=(0, 6))
+
+    def _add_custom(self):
+        ok, msg = MCPX.ozel_ekle(self.f_ad.get(), self.f_paket.get(), self.f_env.get())
+        if not ok:
+            self.f_msg.configure(text=msg)
+            return
+        self._build()
+        self.status.configure(text="Eklendi. Anahtar istiyorsa yapıştır, sonra Uygula'ya bas.", text_color=MUTED)
+
+    def _remove(self, ad):
+        from tkinter import messagebox
+        if not messagebox.askyesno("FENIX", f"'{ad}' eklentisi kaldırılsın mı?", parent=self):
+            return
+        MCPX.ozel_sil(ad)
+        self._build()
+        self.status.configure(text="Kaldırıldı. Uygula'ya bas.", text_color=MUTED)
+
+    def _refresh_status(self):
+        for ad, r in self.rows.items():
+            e = r["e"]
+            durum = MCPX.sunucu_durumu(ad)
+            eksik = MCPX.eksikler(e, self.app.cfg)
+            if not r["switch"].get():
+                text, col = "kapalı", MUTED
+            elif durum and durum.startswith("hazır"):
+                text, col = "✓ " + durum, "#34d399"
+            elif eksik:
+                text, col = "⚠ " + "; ".join(eksik), AMBER
+            elif durum:
+                text, col = durum, AMBER if durum.startswith("hata") else MUTED
+            else:
+                text, col = "Uygula'ya bas", MUTED
+            r["status"].configure(text=text[:90], text_color=col)
+        self.status.configure(text=MCPX._STATE.get("mesaj") or "")
+
+    def _tick(self):
+        if not self._alive or not self.winfo_exists():
+            return
+        try:
+            self._refresh_status()
+        except Exception:
+            pass
+        self.after(2000, self._tick)
+
+    def _apply(self):
+        secim = {ad: bool(r["switch"].get()) for ad, r in self.rows.items()}
+        MCPX.secim_kaydet(secim)
+        keys = self.app.cfg.setdefault("api_keys", {})
+        for ad, r in self.rows.items():
+            ent, name = r["entry"], r["e"].get("anahtar")
+            val = (ent.get() if ent is not None else "").strip()
+            if name and val:
+                try:
+                    save_key("config.yaml", name, val)
+                    keys[name] = val
+                    ent.delete(0, "end")
+                except Exception as ex:
+                    self.status.configure(text=f"Anahtar kaydedilemedi: {ex}", text_color=AMBER)
+                    return
+        self.apply_btn.configure(state="disabled", text="Başlatılıyor…")
+        self.status.configure(text="Eklentiler yeniden başlatılıyor… (ilk seferde 20-30 sn sürebilir)")
+
+        def run():
+            MCPX.yeniden_baslat(self.app.cfg, bildir=lambda t: self.app.after(0, lambda: self.app._flash_status(t, 5000)))
+            self.app.after(0, self._done)
+        threading.Thread(target=run, daemon=True).start()
+
+    def _done(self):
+        if self._alive and self.winfo_exists():
+            self.apply_btn.configure(state="normal", text="Uygula")
+            self._build()
+
+    def _install(self):
+        """Kurulum görünür bir pencerede yapılır ve FENIX kapanır: FENIX açıkken kendi kullandığı kütüphaneler
+        Windows'ta kilitli olduğu için kurulum takılabiliyordu."""
+        from tkinter import messagebox
+        bat = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Eklentileri_Kur.bat")
+        if not os.path.isfile(bat):
+            self.warn_label.configure(text="Eklentileri_Kur.bat bulunamadı.")
+            return
+        if not messagebox.askyesno("FENIX", "Paketler ayrı bir pencerede kurulacak ve bunun için FENIX kapanacak.\n"
+                                            "Kurulum bitince ('[OK]' yazısı) FENIX'i yeniden aç.\n\nDevam edilsin mi?",
+                                   parent=self):
+            return
+        import subprocess
+        try:
+            flags = subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
+            subprocess.Popen(["cmd", "/c", bat] if os.name == "nt" else ["sh", bat], cwd=os.path.dirname(bat),
+                             creationflags=flags)
+        except Exception as ex:
+            self.warn_label.configure(text=f"Kurulum başlatılamadı: {ex}")
+            return
+        self.app.after(300, self.app._finish_close)
+
+    def close(self):
+        self._alive = False
+        self.destroy()
 
 
 class HistoryWindow(ctk.CTkToplevel):
@@ -191,7 +469,7 @@ class HistoryWindow(ctk.CTkToplevel):
 
         top = ctk.CTkFrame(self, fg_color="transparent")
         top.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 4))
-        self.scope_title = ctk.CTkLabel(top, text="", text_color=TEXT, font=("Segoe UI", 15, "bold"), anchor="w")
+        self.scope_title = ctk.CTkLabel(top, text="", text_color=TEXT, font=(FONT_HEAD, 15, "bold"), anchor="w")
         self.scope_title.pack(side="left", fill="x", expand=True)
         self.scope_seg = ctk.CTkSegmentedButton(top, values=[i18n.tr("Bu sohbet"), i18n.tr("Tüm sohbetler")], selected_color=_THEME['base'],
                                                 selected_hover_color="#34d399", unselected_color=PANEL2,
@@ -393,10 +671,10 @@ _INLINE_RE = re.compile(r"(\*\*.+?\*\*|`[^`]+`|\[\d+(?:\s*[,\-–]\s*\d+)*\]|\[?
 def _setup_md_tags(tb):
     """tk.Text üzerinde rapor etiketleri (CTkTextbox fontlu etikete izin vermediği için iç widget'a)."""
     tb.configure(font=("Segoe UI", 12), spacing1=2, spacing3=2, padx=14, pady=10)
-    tb.tag_configure("h1", font=("Segoe UI", 19, "bold"), foreground=_THEME['base'], spacing1=6, spacing3=10)
-    tb.tag_configure("h2", font=("Segoe UI", 15, "bold"), foreground=CYAN, spacing1=14, spacing3=6)
-    tb.tag_configure("h3", font=("Segoe UI", 13, "bold"), foreground=TEXT, spacing1=10, spacing3=4)
-    tb.tag_configure("b", font=("Segoe UI", 12, "bold"), foreground="#ffffff")
+    tb.tag_configure("h1", font=(FONT_HEAD, 19, "bold"), foreground=_THEME['base'], spacing1=6, spacing3=10)
+    tb.tag_configure("h2", font=(FONT_HEAD, 15, "bold"), foreground=CYAN, spacing1=14, spacing3=6)
+    tb.tag_configure("h3", font=(FONT_HEAD, 13, "bold"), foreground=TEXT, spacing1=10, spacing3=4)
+    tb.tag_configure("b", font=(FONT_HEAD, 12, "bold"), foreground="#ffffff")
     tb.tag_configure("code", font=("Consolas", 11), foreground=AMBER)
     tb.tag_configure("cite", foreground=MUTED, font=("Segoe UI", 10))
     tb.tag_configure("missing", foreground="#f59e0b")
@@ -505,7 +783,7 @@ class NobetDialog(ctk.CTkToplevel):
         self.configure(fg_color=BG)
         self.resizable(False, False)
         self.transient(app)
-        ctk.CTkLabel(self, text="🌙 Nöbette kalayım mı?", text_color=TEXT, font=("Segoe UI", 16, "bold"),
+        ctk.CTkLabel(self, text="🌙 Nöbette kalayım mı?", text_color=TEXT, font=(FONT_HEAD, 16, "bold"),
                      anchor="w").pack(fill="x", padx=18, pady=(16, 4))
         ctk.CTkLabel(self, text=("Pencereyi kapatırım ama küçük bir izleme işlemi (yaklaşık 40-60 MB) sağ alttaki simgede "
                                  "çalışmaya devam eder: indirdiğin dosyalara, kopyaladığın linklere ve açılışta başlayan "
@@ -556,7 +834,7 @@ class LearnedWindow(ctk.CTkToplevel):
         self.geometry("780x620")
         self.configure(fg_color=BG)
         self.minsize(560, 420)
-        ctk.CTkLabel(self, text="🎓 Öğrendiğim komutlar", text_color=TEXT, font=("Segoe UI", 15, "bold"),
+        ctk.CTkLabel(self, text="🎓 Öğrendiğim komutlar", text_color=TEXT, font=(FONT_HEAD, 15, "bold"),
                      anchor="w").pack(fill="x", padx=14, pady=(12, 0))
         self.info = ctk.CTkLabel(self, text="", text_color=MUTED, font=("Segoe UI", 10), anchor="w",
                                  wraplength=720, justify="left")
@@ -618,7 +896,7 @@ class LearnedWindow(ctk.CTkToplevel):
             row.pack(fill="x", padx=4, pady=2)
             tag = {"kullanim": "👤", "uretilen": "✨", "egitim": "🎓"}.get(e.get("kaynak"), "")
             ctk.CTkLabel(row, text=f"{tag} {e.get('gorunen', '')}", text_color=TEXT, anchor="w", width=250,
-                         font=("Segoe UI", 12, "bold")).pack(side="left", padx=8, pady=5)
+                         font=(FONT_HEAD, 12, "bold")).pack(side="left", padx=8, pady=5)
             args = json.dumps(e.get("args", {}), ensure_ascii=False)
             ctk.CTkLabel(row, text=f"→ {e.get('arac')} {args[:60]}", text_color=CYAN, anchor="w",
                          font=("Consolas", 10)).pack(side="left", fill="x", expand=True)
@@ -666,7 +944,7 @@ class RemindersWindow(ctk.CTkToplevel):
         self.geometry("560x520")
         self.configure(fg_color=BG)
         self.minsize(420, 360)
-        ctk.CTkLabel(self, text="⏰ Bekleyen hatırlatmalar", text_color=TEXT, font=("Segoe UI", 15, "bold"),
+        ctk.CTkLabel(self, text="⏰ Bekleyen hatırlatmalar", text_color=TEXT, font=(FONT_HEAD, 15, "bold"),
                      anchor="w").pack(fill="x", padx=14, pady=(12, 4))
         ctk.CTkLabel(self, text="Sohbetten de kurabilirsin: \"yarın 15:00'te toplantıyı hatırlat\", "
                                 "\"20 dakika sonra çayı hatırlat\"", text_color=MUTED, font=("Segoe UI", 10),
@@ -880,9 +1158,80 @@ class ReportsWindow(ctk.CTkToplevel):
         self.destroy()
 
 
+class SplashScreen(ctk.CTkToplevel):
+    """Açılış ekranı: ana pencere hazırlanırken holografik bir yükleme ekranı gösterir.
+    Ana pencere hazır olunca kapanır. (Açılış birkaç saniye sürünce 'açılmadı' sanılıyordu.)"""
+    W, H = 520, 320
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.overrideredirect(True)
+        self.configure(fg_color=BG)
+        try:
+            self.attributes("-topmost", True)
+            sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+            # Windows ekran ölçeği (%125, %150...) pencere boyutunu büyütür ama tuvali büyütmez: boyut ölçeğe bölünür
+            try:
+                sc = ctk.ScalingTracker.get_window_scaling(self) or 1.0
+            except Exception:
+                sc = 1.0
+            self.geometry(f"{round(self.W / sc)}x{round(self.H / sc)}+{(sw - self.W) // 2}+{(sh - self.H) // 2}")
+        except Exception:
+            self.geometry(f"{self.W}x{self.H}")
+        self.cv = ctk.CTkCanvas(self, bg=BG, highlightthickness=1, highlightbackground=LINE,
+                                width=self.W, height=self.H)
+        self.cv.pack(fill="both", expand=True)
+        cv, acc = self.cv, MODE_ACCENT["normal"]["base"]
+        for x in range(0, self.W, 32):
+            cv.create_line(x, 0, x, self.H, fill=GRID)
+        for y in range(0, self.H, 32):
+            cv.create_line(0, y, self.W, y, fill=GRID)
+        self.cx, self.cy = self.W // 2, 128
+        self.bars = [cv.create_line(0, 0, 0, 0, fill=acc, width=2, capstyle="round") for _ in range(48)]
+        cv.create_oval(self.cx - 40, self.cy - 40, self.cx + 40, self.cy + 40, outline=acc, width=2, fill=BG)
+        self.core = cv.create_oval(0, 0, 0, 0, fill=acc, width=0)
+        cv.create_text(self.cx, 232, text="F · E · N · I · X", fill=TEXT, font=(FONT_HEAD, 22, "bold"))
+        cv.create_text(self.cx, 260, text="MK-Agentic-System  ·  v" + FENIX_VERSION, fill=MUTED, font=(FONT_MONO, 9))
+        self.msg = cv.create_text(24, self.H - 30, anchor="w", text="", fill=MUTED, font=(FONT_MONO, 9))
+        cv.create_rectangle(24, self.H - 14, self.W - 24, self.H - 12, outline="", fill=PANEL2)
+        self.bar = cv.create_rectangle(24, self.H - 14, 24, self.H - 12, outline="", fill=acc)
+        self.phase = 0.0
+        self.step("Başlatılıyor", 0.05)
+
+    def _frame(self):
+        self.phase += 0.35
+        n = len(self.bars)
+        for i, it in enumerate(self.bars):
+            a = 2 * math.pi * i / n + self.phase * 0.1
+            ln = 6 + 18 * abs(math.sin(i * 0.5 + self.phase))
+            r0 = 50
+            self.cv.coords(it, self.cx + r0 * math.cos(a), self.cy + r0 * math.sin(a),
+                           self.cx + (r0 + ln) * math.cos(a), self.cy + (r0 + ln) * math.sin(a))
+        rc = 24 + 4 * math.sin(self.phase)
+        self.cv.coords(self.core, self.cx - rc, self.cy - rc, self.cx + rc, self.cy + rc)
+
+    def step(self, text, frac):
+        """Yükleme adımı: yazı + ilerleme çubuğu + bir animasyon karesi (ana pencere kurulurken çağrılır)."""
+        try:
+            self.cv.itemconfigure(self.msg, text=i18n.tr(text) + " ...")
+            self.cv.coords(self.bar, 24, self.H - 14, 24 + (self.W - 48) * max(0.0, min(1.0, frac)), self.H - 12)
+            self._frame()
+            self.update()
+        except Exception:
+            pass
+
+
 class FenixApp(ctk.CTk, *_DND_BASES):
     def __init__(self, cfg):
         super().__init__()
+        self.withdraw()                 # ana pencere hazır olana kadar gizli; bu sırada açılış ekranı görünür
+        try:
+            self._splash = SplashScreen(self)
+        except Exception as e:
+            print(f"[AÇILIŞ EKRANI] {e}")
+            self._splash = None
+        if OGR:
+            OGR.ensure_mode(cfg)       # config.yaml'da 'ogrenme' modu yoksa varsayılanı eklenir
         self.cfg = cfg
         self.title("F.E.N.I.X.")
         self.geometry("1200x720")
@@ -902,7 +1251,10 @@ class FenixApp(ctk.CTk, *_DND_BASES):
 
         # Durum
         self.mode_key = cfg.get("default_mode", "normal")
-        self.tts_enabled = cfg["audio"].get("tts_enabled", True)
+        if self.mode_key not in (cfg.get("modes") or {}):
+            self.mode_key = "normal"
+        _tts = user_settings.get("tts_enabled")      # son seçilen hal hatırlanır (yoksa config'teki varsayılan)
+        self.tts_enabled = bool(cfg["audio"].get("tts_enabled", True) if _tts is None else _tts)
         self.ui_queue = queue.Queue()
         self._orb_phase = 0.0
         self._orb_state = "idle"   # idle | listening | thinking
@@ -917,14 +1269,16 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                       "gen": 0, "start": 0.0, "stage_start": 0.0, "shown": 0.0}
 
         # Çekirdek
+        self._splash_step("Hafıza açılıyor", 0.2)
         self.memory = Memory(cfg["memory"]["db_path"], cfg["memory"]["chroma_path"], cfg["api_keys"]["gemini"],
-                             cross_chat=cfg["memory"].get("cross_chat", True))
+                             cross_chat=cfg["memory"].get("cross_chat", True), defer_semantic=True)
         _bk = cfg["api_keys"].get("gemini_yedek") or []
         try:
             from modules import nvidia
             nvidia.configure(cfg)       # NVIDIA: sohbet yedeği (Groq'tan sonra) + görme son yedeği
         except Exception:
             pass
+        self._splash_step("Yapay zekâ bağlantıları hazırlanıyor", 0.35)
         self.llm = LLMClient(cfg["api_keys"]["gemini"], cfg["api_keys"].get("groq", ""),
                              fallbacks=cfg.get("gemini_fallbacks"),
                              gemini_backup_keys=[_bk] if isinstance(_bk, str) else list(_bk),
@@ -939,10 +1293,17 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                            research_cfg=dict(cfg.get("deep_research") or {}, documents=cfg.get("documents") or {}),
                            command_cfg=cfg.get("komut_hafizasi") or {})
         self._attachments = []          # gönderilmeyi bekleyen ekli dosyalar
+        self.after(400, self.memory.start_semantic)    # anlamsal hafıza pencere açıldıktan sonra arka planda yüklenir
+        self.after(3000, YOLH.arka_planda_tara)        # proje klasörleri (içinde .git olanlar) günde bir taranır
+        # eklentiler (MCP) pencere açıldıktan sonra arka planda başlar; hazır olunca durum satırında kısa not
+        self.after(1500, lambda: MCPX.baslat(cfg, bildir=lambda t: self.after(0, lambda: self._flash_status(t, 5000))))
+        if OGR:
+            OGR.setup(self)             # öğrenme döngüsü (Öğrenme modu açıkken çalışır)
         self.after(150, self._apply_mode_theme)     # açılıştaki modun rengi her yere uygulansın
         self.reports = ReportStore("data/raporlar", cfg.get("reports"))
         threading.Thread(target=self._cleanup_reports, daemon=True).start()
         threading.Thread(target=self._cleanup_pasted, daemon=True).start()
+        self._splash_step("Ses sistemi hazırlanıyor", 0.5)
         self.recorder = PushToTalkRecorder(cfg["audio"]["ptt_key"], cfg["audio"]["sample_rate"],
                                            device=cfg["audio"].get("input_device"))
         self.spotlight = Spotlight()
@@ -950,6 +1311,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self.stats.start()
 
         # functions.py'yi arayüze bağla: onay kutusu + yapılan işlemleri Geçmiş'e not düş
+        FBILGI.install(cfg)                 # kendini tanı aracı (modlar/modeller config'ten okunur)
         fx.set_confirm_handler(self._request_confirmation)
         fx.set_notify_handler(self._on_action_notify)
         fx.set_error_handler(self._record_error)
@@ -975,12 +1337,35 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         threading.Thread(target=self._command_training_loop, daemon=True).start()
         fx.set_search_keys(cfg.get("api_keys", {}))
 
+        self._splash_step("Arayüz çiziliyor", 0.7)
         self._build_ui()
+        self._splash_step("Son hazırlıklar", 0.92)
         self._setup_drag_drop()
         self._start_background()
         self._start_gozcu()
         self.after(40, self._tick)           # ~25 FPS orb + UI kuyruğu
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._splash_step("Hazır", 1.0)
+        self.after(250, self._show_main)
+
+    def _splash_step(self, text, frac):
+        if getattr(self, "_splash", None):
+            self._splash.step(text, frac)
+
+    def _show_main(self):
+        """Açılış ekranını kapatıp ana pencereyi gösterir."""
+        try:
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+        except Exception:
+            pass
+        sp, self._splash = getattr(self, "_splash", None), None
+        if sp:
+            try:
+                sp.destroy()
+            except Exception:
+                pass
 
     # ---------------- UI KURULUMU ----------------
     def _build_ui(self):
@@ -1004,7 +1389,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         head = ctk.CTkFrame(p, fg_color="transparent")
         head.pack(fill="x", pady=(14, 6))
         self.brand_label = ctk.CTkLabel(head, text="F.E.N.I.X.", text_color=self._accent(),
-                                        font=("Segoe UI", 19, "bold"))
+                                        font=(FONT_HEAD, 19, "bold"))
         self.brand_label.pack()
         ctk.CTkLabel(head, text=imza.build_label(FENIX_VERSION), text_color=MUTED, font=("Segoe UI", 10)).pack()
 
@@ -1012,7 +1397,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         nb.pack(fill="x", padx=12, pady=(4, 6))
         self.new_chat_btn = ctk.CTkButton(nb, text="＋  Yeni sohbet", height=36, fg_color=self._accent(),
                                           hover_color=self._accent_hover(), text_color=BG,
-                                          font=("Segoe UI", 13, "bold"), command=self._new_chat)
+                                          font=(FONT_HEAD, 13, "bold"), command=self._new_chat)
         self.new_chat_btn.pack(side="left", fill="x", expand=True)
         ctk.CTkButton(nb, text="🕶", width=40, height=36, fg_color=PANEL2, hover_color=CYAN, text_color=TEXT,
                       font=("Segoe UI", 15), command=lambda: self._new_chat(incognito=True)).pack(side="left",
@@ -1037,7 +1422,9 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         menu.grid_columnconfigure((0, 1), weight=1)
         items = [("📜 Geçmiş", self._show_history), ("📄 Raporlar", self._show_reports),
                  ("⏰ Hatırlatma", self._show_reminders), ("🧠 Yetenekler", self._show_skills),
+                 ("🧩 Eklentiler", self._show_plugins),
                  ("🎓 Öğrendiklerim", self._show_learned), ("📊 İstatistik", self._show_stats),
+                 *([("🧪 Oyun alanı", self._show_lab)] if OGR else []),
                  ("🌙 Nöbete geç", self._go_nobet),
                  ("⚙️ Ayarlar", self._show_settings)]
         for i, (text, cmd) in enumerate(items):
@@ -1048,16 +1435,16 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                                       wraplength=200, justify="left")
         self.mode_desc.pack(side="bottom", padx=12, pady=(2, 6))
         self.mode_var = ctk.StringVar(value=self.mode_key)
-        self._mode_labels = {k: i18n.tr(self.cfg["modes"][k]["label"]) for k in ("safe", "normal", "devil")}
+        self._mode_labels = {k: i18n.tr(self.cfg["modes"][k]["label"]) for k in MODE_KEYS}
         self.mode_seg = ctk.CTkSegmentedButton(
             bottom, values=list(self._mode_labels.values()), selected_color=self._accent(),
             selected_hover_color=self._accent_hover(),
             unselected_color=PANEL2, font=("Segoe UI", 10), command=self._on_mode_seg)
         self.mode_seg.set(self._mode_labels[self.mode_key])
         self.mode_seg.pack(side="bottom", fill="x", padx=12)
-        ctk.CTkLabel(bottom, text="MOD", text_color=MUTED, font=("Segoe UI", 10, "bold")).pack(side="bottom")
+        ctk.CTkLabel(bottom, text="MOD", text_color=MUTED, font=(FONT_MONO, 10)).pack(side="bottom")
 
-        ctk.CTkLabel(p, text="SOHBETLER", text_color=MUTED, font=("Segoe UI", 10, "bold"), anchor="w").pack(
+        ctk.CTkLabel(p, text="SOHBETLER", text_color=MUTED, font=(FONT_MONO, 10), anchor="w").pack(
             fill="x", padx=14, pady=(4, 0))
         self.sessions_frame = ctk.CTkScrollableFrame(p, fg_color="transparent", corner_radius=0)
         self.sessions_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
@@ -1097,6 +1484,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                 self.confirm_ok_btn.configure(fg_color=accent, hover_color=hover)
             if hasattr(self, "chat"):
                 self.chat.tag_config("fenix", foreground=accent)
+                self.chat._textbox.tag_config("fenix_lbl", foreground=accent)
             if hasattr(self, "pipe_bar"):
                 self.pipe_bar.configure(progress_color=accent)
             if hasattr(self, "pipe_stage") and not self._pipe["active"]:
@@ -1306,7 +1694,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         win.configure(fg_color=BG)
         win.attributes("-topmost", True)
         ctk.CTkLabel(win, text="⏰ Hatırlatma" + (" (kaçırılan)" if missed else ""), text_color=AMBER,
-                     font=("Segoe UI", 16, "bold")).pack(pady=(18, 6))
+                     font=(FONT_HEAD, 16, "bold")).pack(pady=(18, 6))
         ctk.CTkLabel(win, text=r["text"], text_color=TEXT, font=("Segoe UI", 14), wraplength=380).pack(padx=16)
         ctk.CTkLabel(win, text=when, text_color=MUTED, font=("Segoe UI", 11)).pack(pady=(4, 10))
         bar = ctk.CTkFrame(win, fg_color="transparent")
@@ -1467,7 +1855,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
 
         self.pipe_body = ctk.CTkFrame(self.pipe, fg_color="transparent")
         self.pipe_stage = ctk.CTkLabel(self.pipe_body, text="", text_color=self._accent(),
-                                       font=("Segoe UI", 12, "bold"), wraplength=180)
+                                       font=(FONT_HEAD, 12, "bold"), wraplength=180)
         self.pipe_stage.pack(pady=(6, 6), padx=10)
         self.pipe_steps_frame = ctk.CTkFrame(self.pipe_body, fg_color="transparent")
         self.pipe_steps_frame.pack(fill="x", padx=12)
@@ -1487,7 +1875,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
     def _expand_pipeline(self, expand=True):
         if expand and not self.pipe_expanded:
             self.pipe.configure(width=230)
-            self.pipe_title.configure(text="GÖREV  ◂", text_color=self._accent(), font=("Segoe UI", 12, "bold"))
+            self.pipe_title.configure(text="GÖREV  ◂", text_color=self._accent(), font=(FONT_HEAD, 12, "bold"))
             self.pipe_hint.configure(text="gizlemek için başlığa tıkla")
             self.pipe_body.pack(fill="both", expand=True)
             self.pipe_expanded = True
@@ -1627,18 +2015,35 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         c.grid_columnconfigure(0, weight=1)
 
         self.canvas = ctk.CTkCanvas(c, bg=BG, highlightthickness=0, width=380, height=380)
-        self.canvas.grid(row=0, column=0, pady=10)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.canvas.bind("<Configure>", lambda e: self._draw_grid())
 
         self.mic_btn = ctk.CTkButton(c, text="🎤  Bas-Konuş", fg_color=PANEL, hover_color=self._accent(),
-                                     text_color=TEXT, height=48, width=200, font=("Segoe UI", 14, "bold"),
+                                     text_color=TEXT, height=48, width=200, font=(FONT_HEAD, 14, "bold"),
                                      command=self._toggle_mic)
         self.mic_btn.grid(row=1, column=0, pady=(0, 8))
-        self.status_label = ctk.CTkLabel(c, text="Hazır", text_color=MUTED, font=("Segoe UI", 12))
+        self.status_label = ctk.CTkLabel(c, text="Hazır", text_color=MUTED, font=(FONT_MONO, 12))
         self.status_label.grid(row=2, column=0, pady=(0, 14))
 
     def _build_right(self):
         r = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=0)
         r.grid(row=0, column=3, sticky="nsew")
+        self._right_panel = r
+        # Sohbet genişliği: sol kenardaki ince ayraç sürüklenir, genişlik hatırlanır
+        sash = ctk.CTkFrame(r, width=6, fg_color=PANEL2, corner_radius=0, cursor="sb_h_double_arrow")
+        sash.place(x=0, y=0, relheight=1)
+        sash.bind("<B1-Motion>", self._drag_chat_sash)
+        sash.bind("<ButtonRelease-1>", lambda e: user_settings.set("chat_width", getattr(self, "_chat_width", None)))
+        sash.bind("<Enter>", lambda e: sash.configure(fg_color=self._accent()))
+        sash.bind("<Leave>", lambda e: sash.configure(fg_color=PANEL2))
+        self._chat_sash = sash
+        w = user_settings.get("chat_width")
+        if isinstance(w, int) and w >= 360:
+            self.after(50, lambda: self._set_chat_width(w))
+        for seq in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
+            self.bind_all(seq, lambda e: self._chat_zoom(+1))
+        for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
+            self.bind_all(seq, lambda e: self._chat_zoom(-1))
         r.grid_rowconfigure(1, weight=1)
         r.grid_columnconfigure(0, weight=1)
 
@@ -1654,13 +2059,14 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self.chat_hist_btn = ctk.CTkButton(vb, text="📜", width=34, height=30, fg_color=PANEL2, hover_color=CYAN,
                                            text_color=TEXT, command=self._show_chat_history)
         self.chat_hist_btn.pack(side="left", padx=(0, 6))
-        self.chat_title = ctk.CTkLabel(vb, text="Yeni sohbet", text_color=TEXT, font=("Segoe UI", 14, "bold"),
+        self.chat_title = ctk.CTkLabel(vb, text="Yeni sohbet", text_color=TEXT, font=(FONT_HEAD, 14, "bold"),
                                        anchor="w")
         self.chat_title.pack(side="left", fill="x", expand=True)
         self.stop_btn.configure(state="disabled", fg_color=PANEL2)
         self._refresh_voice_btn()
 
-        self.chat = ctk.CTkTextbox(r, fg_color=BG, text_color=TEXT, font=("Segoe UI", 13), wrap="word")
+        self._chat_font = int(user_settings.get("chat_font", 13) or 13)
+        self.chat = ctk.CTkTextbox(r, fg_color=BG, text_color=TEXT, font=("Segoe UI", self._chat_font), wrap="word")
         i18n.mark_raw(self.chat)
         self.chat.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
         self.chat.configure(state="disabled")
@@ -1669,6 +2075,9 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self.chat.tag_config("sys", foreground=MUTED)
         self.chat.tag_config("b", foreground="#ffffff")
         self.chat.tag_config("head", foreground=CYAN)
+        # etiket satırları (CTkTextbox 'font' kabul etmez: alttaki Tk metin kutusuna verilir)
+        self.chat._textbox.tag_config("user_lbl", foreground=MUTED, font=(FONT_MONO, 10), spacing1=6)
+        self.chat._textbox.tag_config("fenix_lbl", foreground=self._accent(), font=(FONT_MONO, 10), spacing1=6)
 
         # Onay kutusu alanı (gizli, gerektiğinde belirir)
         self.confirm_frame = ctk.CTkFrame(r, fg_color=PANEL2)
@@ -1698,7 +2107,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self.attach_btn.grid(row=1, column=0, padx=(0, 6))
         # Çok satırlı giriş: Enter = gönder, Shift+Enter = alt satır, Ctrl+A/Z/Y çalışır
         self.entry = ctk.CTkTextbox(bar, fg_color=BG, text_color=TEXT, height=46, wrap="word",
-                                    font=("Segoe UI", 13), undo=True)
+                                    font=("Segoe UI", getattr(self, "_chat_font", 13)), undo=True)
         self.entry.grid(row=1, column=1, sticky="ew", padx=(0, 6))
         tb = self.entry._textbox
         tb.bind("<Return>", self._on_enter)
@@ -1709,6 +2118,8 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         tb.bind("<Control-v>", self._on_paste)
         tb.bind("<Control-V>", self._on_paste)
         tb.bind("<KeyRelease>", lambda e: self._autosize_entry())
+        tb.bind("<Control-BackSpace>", self._delete_word)
+        tb.bind("<Control-Delete>", lambda e: self._delete_word(e, forward=True))
         self.send_btn = ctk.CTkButton(bar, text="Gönder", fg_color=self._accent(), hover_color=self._accent_hover(),
                                       width=80, height=46, command=self._send_text)
         self.send_btn.grid(row=1, column=2)
@@ -1720,35 +2131,90 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                           f"  •  Bas-Konuş: uygulama içi buton ya da '{self.cfg['audio']['ptt_key']}' tuşu.")
 
     # ---------------- ORB ANIMASYONU ----------------
+    _ORB_BARS = 72
+
+    @staticmethod
+    def _mix(c1, c2, t):
+        """İki rengi karıştırır (Tk'de saydamlık yok: soluk tonlar arka planla karıştırılarak elde edilir)."""
+        a = [int(c1[k:k + 2], 16) for k in (1, 3, 5)]
+        b = [int(c2[k:k + 2], 16) for k in (1, 3, 5)]
+        return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(a, b))
+
+    def _draw_grid(self):
+        cv = self.canvas
+        cv.delete("grid")
+        w, h = int(cv.winfo_width()) or 380, int(cv.winfo_height()) or 380
+        for x in range(0, w, 40):
+            cv.create_line(x, 0, x, h, fill=GRID, tags="grid")
+        for y in range(0, h, 40):
+            cv.create_line(0, y, w, y, fill=GRID, tags="grid")
+        cv.delete("hud")
+        cv.create_text(18, 16, anchor="nw", text=i18n.tr("FENIX // ÇEKİRDEK"), fill=MUTED, font=(FONT_MONO, 9), tags="hud")
+        cv.tag_lower("grid")
+
     def _draw_orb(self):
-        self.canvas.delete("all")
-        w = int(self.canvas.winfo_width()) or 380
-        h = int(self.canvas.winfo_height()) or 380
-        cx, cy = w // 2, h // 2
+        """Holografik daire. Öğeler BİR KEZ oluşturulur, her karede yalnızca yerleri güncellenir (yazarken takılmaz).
+        Boşta: yavaş nefes; dinlerken: çubuklar ses seviyesine göre; düşünürken: hızlı dalga."""
+        cv = self.canvas
+        w = int(cv.winfo_width()) or 380
+        h = int(cv.winfo_height()) or 380
+        cx, cy = w // 2, h // 2 - 10
+        sc = max(0.75, min(1.35, min(w, h) / 420))
         self._orb_phase += 0.09
+        if not getattr(self, "_orb_items", None):
+            self._orb_outer = cv.create_oval(0, 0, 0, 0, width=1)
+            self._orb_bars = [cv.create_line(0, 0, 0, 0, width=3, capstyle="round") for _ in range(self._ORB_BARS)]
+            self._orb_dash = cv.create_oval(0, 0, 0, 0, width=1, dash=(3, 6))
+            self._orb_ring = cv.create_oval(0, 0, 0, 0, width=2, fill=BG)
+            self._orb_core = cv.create_oval(0, 0, 0, 0, width=0)
+            self._orb_ticks = [cv.create_line(0, 0, 0, 0, width=1) for _ in range(2)]
+            self._orb_items = True
+            self._orb_style = None
+            self._draw_grid()
 
         accent, light = self._accent(), self._accent_light()
-        if self._orb_state == "idle":
-            base_r, pulse, color, rings, speed = 70, 6, accent, 3, 1
-        elif self._orb_state == "listening":
-            base_r, pulse, color, rings, speed = 80, 18, light, 4, 2
-        else:  # thinking
-            base_r, pulse, color, rings, speed = 76, 12, accent, 5, 4
+        state = self._orb_state
+        style = (accent, light, state)
+        if style != self._orb_style:
+            dim = self._mix(accent, BG, 0.78)
+            cv.itemconfigure(self._orb_outer, outline=dim)
+            cv.itemconfigure(self._orb_dash, outline=self._mix(accent, BG, 0.5))
+            cv.itemconfigure(self._orb_ring, outline=accent)
+            cv.itemconfigure(self._orb_core, fill=light if state == "listening" else accent)
+            bar_col = light if state != "idle" else self._mix(accent, BG, 0.2)
+            for it in self._orb_bars:
+                cv.itemconfigure(it, fill=bar_col)
+            for it in self._orb_ticks:
+                cv.itemconfigure(it, fill=self._mix(accent, BG, 0.5))
+            self._orb_style = style
 
-        pts = 28
-        for i in range(rings):
-            phase = self._orb_phase * speed + i * 0.6
-            r = base_r + pulse * math.sin(phase) + i * 14
-            col = color if i % 2 == 0 else light
-            for k in range(pts):
-                ang = (2 * math.pi * k / pts) + phase * 0.3
-                px = cx + r * math.cos(ang)
-                py = cy + r * math.sin(ang)
-                self.canvas.create_oval(px - 2, py - 2, px + 2, py + 2, fill=col, outline="")
-
-        core_r = base_r * 0.5 + pulse * 0.4 * math.sin(self._orb_phase * speed)
-        self.canvas.create_oval(cx - core_r, cy - core_r, cx + core_r, cy + core_r,
-                                fill=color, outline=light, width=2)
+        ph = self._orb_phase
+        level = 0.0
+        if state == "listening" and getattr(self, "recorder", None) is not None:
+            level = min(1.0, getattr(self.recorder, "level", 0.0) * 4)
+        r0 = 112 * sc
+        n = self._ORB_BARS
+        for i, it in enumerate(self._orb_bars):
+            if state == "idle":
+                ln = 6 + 10 * abs(math.sin(i * 0.55 + ph * 0.5))
+            elif state == "listening":
+                ln = 8 + (14 + 34 * level) * abs(math.sin(i * 0.9 + ph * 2.2))
+            else:
+                ln = 8 + 28 * abs(math.sin(i * 0.35 + ph * 3.0) * math.cos(i * 0.21 - ph))
+            a = 2 * math.pi * i / n + ph * (0.05 if state == "idle" else 0.15)
+            ca, sa = math.cos(a), math.sin(a)
+            cv.coords(it, cx + r0 * ca, cy + r0 * sa, cx + (r0 + ln * sc) * ca, cy + (r0 + ln * sc) * sa)
+        ro = 170 * sc
+        cv.coords(self._orb_outer, cx - ro, cy - ro, cx + ro, cy + ro)
+        rd = 96 * sc
+        cv.coords(self._orb_dash, cx - rd, cy - rd, cx + rd, cy + rd)
+        rr = 66 * sc
+        cv.coords(self._orb_ring, cx - rr, cy - rr, cx + rr, cy + rr)
+        pulse = {"idle": 2, "listening": 6, "thinking": 4}.get(state, 2)
+        rc = (44 + pulse * math.sin(ph * (1 if state == "idle" else 3))) * sc
+        cv.coords(self._orb_core, cx - rc, cy - rc, cx + rc, cy + rc)
+        cv.coords(self._orb_ticks[0], cx - ro - 20 * sc, cy, cx - ro + 10 * sc, cy)
+        cv.coords(self._orb_ticks[1], cx + ro - 10 * sc, cy, cx + ro + 20 * sc, cy)
 
     # ---------------- OLAY DÖNGÜSÜ ----------------
     def _tick(self):
@@ -1793,7 +2259,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                 except Exception as e:
                     print(f"[UI OLAY HATASI] {kind}: {e}")
         finally:
-            self.after(40, self._tick)
+            self.after(40 if self._orb_state != "idle" else 66, self._tick)    # boşta ~15 FPS, meşgulken ~25 FPS
 
     def _handle_ui_event(self, kind, data):
         if kind == "chat":
@@ -1874,6 +2340,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                 threading.Thread(target=lambda: audio_io.speak(ev["kisa"], voice), daemon=True).start()
         elif kind == "answer":
             sid, text = data
+            self._notify_answer(text)
             if sid is None or sid == self.session_id:
                 self._append_chat("fenix", text)
             else:
@@ -1906,8 +2373,11 @@ class FenixApp(ctk.CTk, *_DND_BASES):
     # ---------------- CHAT ----------------
     def _append_chat(self, who, text):
         self.chat.configure(state="normal")
-        prefix = {"user": i18n.tr("Sen"), "fenix": "FENIX", "sys": "•"}.get(who, who)
-        self.chat.insert("end", f"\n{prefix}: ", who)
+        if who in ("user", "fenix"):
+            label = "> " + (i18n.tr("Sen").upper() if who == "user" else "FENIX")
+            self.chat.insert("end", f"\n{label}\n", who + "_lbl")
+        else:
+            self.chat.insert("end", "\n• ", who)
         if who == "sys":
             text = i18n.tr(text)
         elif who == "fenix":
@@ -1953,9 +2423,72 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         tb.mark_set("insert", "end-1c")
         return "break"
 
+    def _set_chat_width(self, w):
+        total = self.winfo_width() or 1200
+        w = max(360, min(int(w), total - 520))           # sol menü + daire için yer kalsın
+        self._chat_width = w
+        self.grid_columnconfigure(3, weight=0, minsize=w)
+        self.grid_columnconfigure(2, weight=1)
+        try:
+            self._right_panel.configure(width=w)
+            self.confirm_label.configure(wraplength=max(300, w - 60))
+        except Exception:
+            pass
+
+    def _drag_chat_sash(self, event):
+        r = self._right_panel
+        self._set_chat_width(r.winfo_rootx() + r.winfo_width() - event.x_root)
+
+    def _chat_zoom(self, step):
+        """Ctrl + / Ctrl - : sohbet ve yazı kutusu yazı boyutu (10-22), hatırlanır."""
+        self._chat_font = max(10, min(22, self._chat_font + step))
+        self.chat.configure(font=("Segoe UI", self._chat_font))
+        self.entry.configure(font=("Segoe UI", self._chat_font))
+        user_settings.set("chat_font", self._chat_font)
+        self._flash_status(f"Yazı boyutu: {self._chat_font}")
+        return "break"
+
+    def _flash_status(self, text, ms=2500):
+        """Dairenin altındaki durum satırında kısa süreli not (sohbete yazılmaz)."""
+        try:
+            self.status_label.configure(text=text)
+            token = object()
+            self._flash_token = token
+
+            def back():
+                if getattr(self, "_flash_token", None) is token and self._orb_state == "idle":
+                    self.status_label.configure(text="Hazır")
+            self.after(ms, back)
+        except Exception:
+            pass
+
     def _autosize_entry(self):
         lines = int(self.entry._textbox.index("end-1c").split(".")[0])
+        if lines == getattr(self, "_entry_lines", None):      # satır sayısı aynıysa yeniden boyutlandırma (takılmayı önler)
+            return
+        self._entry_lines = lines
         self.entry.configure(height=min(max(46, 24 * lines + 14), 160))
+
+    def _delete_word(self, event, forward=False):
+        """Ctrl+Backspace: önceki kelimeyi, Ctrl+Delete: sonraki kelimeyi siler (Windows'taki alışkanlık)."""
+        tb = event.widget
+        try:
+            if tb.tag_ranges("sel"):
+                tb.delete("sel.first", "sel.last")
+                return "break"
+            if forward:
+                end = tb.index("insert wordend")
+                if tb.compare(end, "==", "insert"):
+                    end = tb.index("insert +1c")
+                tb.delete("insert", end)
+            else:
+                start = tb.index("insert -1c wordstart")
+                while tb.compare(start, "<", "insert") and tb.get(start).isspace() and tb.compare(start, ">", "1.0"):
+                    start = tb.index(f"{start} -1c wordstart")      # kelimeden önceki boşlukları da al
+                tb.delete(start, "insert")
+        except Exception:
+            pass
+        return "break"
 
     def _send_text(self):
         text = self.entry.get("1.0", "end").strip()
@@ -2125,6 +2658,18 @@ class FenixApp(ctk.CTk, *_DND_BASES):
 
     def _process_input(self, text):
         stop_speaking()      # yeni komut geldi: eski cevabı okumayı bırak
+        # Mod önerisine "evet" dendiyse: önerilen moda geç, asıl isteği orada yeniden çalıştır (v1.2.1)
+        try:
+            gecis = self.agent.mod_gecisi(text) if not self._attachments else None
+        except Exception:
+            gecis = None
+        if gecis and gecis["mod"] in self.cfg.get("modes", {}):
+            self.mode_var.set(gecis["mod"])
+            self._on_mode_change()
+            etiket = i18n.tr(self.cfg["modes"][gecis["mod"]].get("label", gecis["mod"]))
+            self._append_chat("sys", f"{etiket} moduna geçtim: {gecis['sebep']}. İsteğini bu modda yeniden "
+                                     "çalıştırıyorum.")
+            text = gecis["metin"]
         atts = self._take_attachments()          # bekleyen ekler bu komutla gider (yazılı ya da sesli)
         names = ", ".join(a["name"] for a in atts)
         if atts:
@@ -2134,7 +2679,8 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         mode_cfg = self.cfg["modes"][mode_key]
         memo = text + (f"\n[Ekli dosyalar: {names}]" if atts else "")
         sid = self._ensure_session()
-        self._run_task(lambda: self.agent.handle(text, mode_key, mode_cfg, attachments=atts or None),
+        self._run_task(lambda: (OGR.handle_and_learn(self, text, mode_key, mode_cfg, atts) if OGR else
+                                self.agent.handle(text, mode_key, mode_cfg, attachments=atts or None)),
                        user_text=memo, session_id=sid)
 
     def run_day_summary(self, day, session_id=None):
@@ -2176,6 +2722,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             self.tts_switch.select()
         else:
             self.tts_switch.deselect()
+        user_settings.set("tts_enabled", self.tts_enabled)
         self._refresh_voice_btn()
 
     def _refresh_voice_btn(self):
@@ -2362,9 +2909,13 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                   "  onay kutusu ile sorulur.",
                   "",
                   "MODLARA GÖRE YETKİ"]
-        for key in ["safe", "normal", "devil"]:
+        for key in MODE_KEYS:
             m = self.cfg["modes"][key]
             lines.append(f"  • {m['label']}: sistem eylemleri {'AÇIK' if m.get('allow_actions') else 'KAPALI'}")
+        n_yol, n_proje = len(YOLH.yollar()), len(YOLH.projeler())
+        lines += ["", "YOL HAFIZASI", f"  • {'Açık' if YOLH.acik() else 'Kapalı'} · öğrenilmiş yol: {n_yol} · "
+                                      f"bilinen proje klasörü: {n_proje}"]
+        lines += ["", "EKLENTİLER (MCP)"] + ["  " + x for x in MCPX.durum_metni().splitlines()]
         lines += ["", "KISAYOL KOMUTLARIN (tek cümleyle birden çok iş)"]
         ms = macro_store.load()
         if ms:
@@ -2421,10 +2972,11 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                  f"  Gemini : {mask_key(c['api_keys'].get('gemini'))}",
                  f"  Groq   : {mask_key(c['api_keys'].get('groq'))}",
                  f"  NVIDIA : {mask_key(c['api_keys'].get('nvidia'))}",
+                 f"  Tavily : {mask_key(c['api_keys'].get('tavily'))}",
                  "  Groq → NVIDIA → Gemini",
                  "",
                  f"MODLAR  (varsayılan: {c.get('default_mode')})"]
-        for key in ["safe", "normal", "devil"]:
+        for key in MODE_KEYS:
             m = c["modes"][key]
             lines += [f"  {m['label']}",
                       f"    sağlayıcı     : {m.get('provider')}",
@@ -2466,6 +3018,9 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                   "kaydet (Ctrl+S) ve FENIX'i yeniden başlat."]
         return "\n".join(lines)
 
+    def _show_lab(self):
+        self._open_window("lab", lambda: OGR.lab_window(self, ReadOnlyWindow, globals()))
+
     def _show_learned(self):
         self._open_window("learned", lambda: LearnedWindow(self))
 
@@ -2476,6 +3031,21 @@ class FenixApp(ctk.CTk, *_DND_BASES):
     def _show_skills(self):
         self._open_window("skills", lambda: ReadOnlyWindow(self, "Yetenekler", self._skills_text,
                                                            size="560x600"))
+
+    def _notify_answer(self, text):
+        """Kullanıcı başka bir penceredeyken (tarayıcı vb.) cevap gelirse sağ altta Windows bildirimi gösterir."""
+        try:
+            if not user_settings.get("cevap_bildirimi", True) or self._window_in_front():
+                return
+            plain = re.sub(r"[*_`#>]+", "", str(text or "")).strip()
+            plain = " ".join(plain.split())
+            if plain:
+                notifier.show_toast_async(i18n.tr("FENIX cevap verdi"), plain[:180] + ("…" if len(plain) > 180 else ""))
+        except Exception:
+            pass
+
+    def _show_plugins(self):
+        return self._open_window("plugins", lambda: PluginsWindow(self))
 
     def _show_settings(self):
         self._open_window("settings", lambda: SettingsWindow(self, self._settings_text))
@@ -2534,6 +3104,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self.tts_enabled = bool(self.tts_switch.get())
         if not self.tts_enabled:
             stop_speaking()
+        user_settings.set("tts_enabled", self.tts_enabled)
         self._refresh_voice_btn()
 
     # ---------------- MOD ----------------
@@ -2541,16 +3112,19 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self.mode_key = self.mode_var.get()
         if hasattr(self, "mode_seg") and self.mode_seg.get() != self._mode_labels.get(self.mode_key):
             self.mode_seg.set(self._mode_labels.get(self.mode_key))
-        self.llm.reset_mode_session()
+        self.llm.reset_mode_session(ortak_koru=True)      # mod değişince konuşma unutulmaz (04.11)
         self._update_mode_desc()
         self._apply_mode_theme()
-        self._append_chat("sys", f"Mod değişti: {self.cfg['modes'][self.mode_key]['label']}")
+        self._flash_status("Mod: " + i18n.tr(self.cfg['modes'][self.mode_key]['label']))   # sohbete yazılmaz
+        if OGR:
+            OGR.sync(self)
 
     def _update_mode_desc(self):
         desc = {
             "safe": "Sadece okuma ve sohbet. Sisteme dokunmaz.",
             "normal": "Gündelik asistan. Güvenli işlemleri yapar, riskli olanları sorar.",
             "devil": "Derin analiz & ajan. Web analizi, çok adımlı görevler. Kritik işlemlerde yine onay.",
+            **(OGR.MODE_DESC if OGR else {}),
         }.get(self.mode_key, "")
         self.mode_desc.configure(text=desc)
 
@@ -2618,6 +3192,12 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         return dlg.result
 
     def _finish_close(self):
+        if OGR:
+            OGR.shutdown(self)
+        try:
+            MCPX.durdur()
+        except Exception:
+            pass
         self.stats.stop()
         self.destroy()
         os._exit(0)
@@ -2681,7 +3261,7 @@ def choose_language_first_run(cfg_lang=""):
     win.title("FENIX")
     win.geometry("360x420")
     win.resizable(False, False)
-    ctk.CTkLabel(win, text="F.E.N.I.X.", font=("Segoe UI", 26, "bold"), text_color="#f97316").pack(pady=(24, 4))
+    ctk.CTkLabel(win, text="F.E.N.I.X.", font=(FONT_HEAD, 26, "bold"), text_color="#f97316").pack(pady=(24, 4))
     ctk.CTkLabel(win, text="Dil seçin / Choose your language", font=("Segoe UI", 13)).pack(pady=(0, 14))
 
     def pick(code):
@@ -2698,6 +3278,7 @@ def choose_language_first_run(cfg_lang=""):
 GEMINI_KEY_URL = "https://aistudio.google.com/apikey"
 GROQ_KEY_URL = "https://console.groq.com/keys"
 NVIDIA_KEY_URL = "https://build.nvidia.com/settings/api-keys"
+TAVILY_KEY_URL = "https://app.tavily.com/home"
 
 
 def _key_missing(cfg):
@@ -2705,22 +3286,35 @@ def _key_missing(cfg):
     return not k or k.startswith("BURAYA")
 
 
-def save_keys(path, gemini, groq="", nvidia=""):
+def _put_key(text, name, value):
+    """config.yaml metninde api_keys altındaki tek bir anahtarı yazar; açıklamalar ve diğer ayarlar korunur."""
+    value = value.replace('"', "").strip()
+    rx = re.compile(r'^(\s+)' + re.escape(name) + r':[ \t]*(".*?"|\'.*?\'|[^\n#]*)', re.M)
+    if rx.search(text):
+        return rx.sub(lambda m: f'{m.group(1)}{name}: "{value}"', text, count=1)
+    return text.replace("api_keys:\n", f'api_keys:\n  {name}: "{value}"\n', 1)
+
+
+def save_key(path, name, value):
+    """Tek bir API anahtarını config.yaml'a kaydeder (ör. eklentiler penceresinden Notion anahtarı)."""
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(_put_key(text, name, value))
+
+
+def save_keys(path, gemini, groq="", nvidia="", tavily=""):
     """Anahtarları config.yaml'a yazar; dosyadaki açıklamalar ve diğer ayarlar korunur."""
     with open(path, encoding="utf-8") as f:
         text = f.read()
-
-    def put(text, name, value):
-        value = value.replace('"', "").strip()
-        rx = re.compile(r'^(\s+)' + name + r':[ \t]*(".*?"|\'.*?\'|[^\n#]*)', re.M)
-        if rx.search(text):
-            return rx.sub(lambda m: f'{m.group(1)}{name}: "{value}"', text, count=1)
-        return text.replace("api_keys:\n", f'api_keys:\n  {name}: "{value}"\n', 1)
+    put = _put_key
     text = put(text, "gemini", gemini)
     if groq.strip():
         text = put(text, "groq", groq)
     if nvidia.strip():
         text = put(text, "nvidia", nvidia)
+    if tavily.strip():
+        text = put(text, "tavily", tavily)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
 
@@ -2744,13 +3338,13 @@ def setup_keys_window(path="config.yaml"):
     done = {"ok": False, "force": False}
     win = ctk.CTk()
     win.title("FENIX • Kurulum")
-    win.geometry("520x580")
+    win.geometry("520x660")
     win.resizable(False, False)
     try:
         win.iconbitmap("fenix.ico")
     except Exception:
         pass
-    ctk.CTkLabel(win, text="🔑 API anahtarı", font=("Segoe UI", 20, "bold"), text_color="#f97316").pack(pady=(20, 6))
+    ctk.CTkLabel(win, text="🔑 API anahtarı", font=(FONT_HEAD, 20, "bold"), text_color="#f97316").pack(pady=(20, 6))
     ctk.CTkLabel(win, text="FENIX'in çalışması için ücretsiz bir Gemini anahtarı gerekir. Anahtar yalnızca bu bilgisayarda "
                            "(config.yaml) saklanır, kimseyle paylaşılmaz.",
                  wraplength=460, justify="left").pack(padx=24, pady=(0, 10))
@@ -2773,6 +3367,13 @@ def setup_keys_window(path="config.yaml"):
     e_nv.pack(side="left")
     ctk.CTkButton(row2, text="NVIDIA anahtarı al", width=130, fg_color="#374151",
                   command=lambda: webbrowser.open(NVIDIA_KEY_URL)).pack(side="right")
+    ctk.CTkLabel(win, text="Tavily API anahtarı (isteğe bağlı: daha iyi web araması, aylık ücretsiz kota)", anchor="w").pack(fill="x", padx=24)
+    row3 = ctk.CTkFrame(win, fg_color="transparent")
+    row3.pack(fill="x", padx=24, pady=(2, 6))
+    e_tav = ctk.CTkEntry(row3, placeholder_text="tvly-...", show="•", width=330)
+    e_tav.pack(side="left")
+    ctk.CTkButton(row3, text="Tavily anahtarı al", width=130, fg_color="#374151",
+                  command=lambda: webbrowser.open(TAVILY_KEY_URL)).pack(side="right")
     status = ctk.CTkLabel(win, text="", wraplength=460, justify="left", text_color="#fbbf24")
     status.pack(padx=24, pady=(8, 4))
     btn = ctk.CTkButton(win, text="Kaydet ve başlat", height=38, fg_color="#059669", hover_color="#10b981")
@@ -2780,7 +3381,7 @@ def setup_keys_window(path="config.yaml"):
     ctk.CTkButton(win, text="Vazgeç", fg_color="transparent", border_width=1, command=win.destroy).pack()
 
     def finish(gem, groq):
-        save_keys(path, gem, groq, e_nv.get().strip())
+        save_keys(path, gem, groq, e_nv.get().strip(), e_tav.get().strip())
         done["ok"] = True
         win.destroy()
 
@@ -2818,7 +3419,29 @@ def setup_keys_window(path="config.yaml"):
     return done["ok"]
 
 
+def _single_instance():
+    """Windows'ta FENIX zaten açıksa ikinci kopya açılmaz; açık olan pencere öne getirilir.
+    (Açılış birkaç saniye sürünce simgeye tekrar tıklanıyor ve iki FENIX açılıyordu.) -> True: devam et"""
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        k32, u32 = ctypes.windll.kernel32, ctypes.windll.user32
+        _single_instance.handle = k32.CreateMutexW(None, False, "Local\\FENIX_MK_single_instance")
+        if k32.GetLastError() != 183:          # ERROR_ALREADY_EXISTS değil: ilk kopya
+            return True
+        hwnd = u32.FindWindowW(None, "F.E.N.I.X.")
+        if hwnd:
+            u32.ShowWindow(hwnd, 9)            # SW_RESTORE
+            u32.SetForegroundWindow(hwnd)
+        return False
+    except Exception:
+        return True
+
+
 def main():
+    if not _single_instance():
+        return
     _install_crash_logging()
     import tkinter.messagebox as mb
     from modules.config_check import ensure_config

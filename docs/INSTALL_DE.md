@@ -11,6 +11,7 @@ Dauer etwa **15 Minuten**. Keine Vorkenntnisse nötig; folge einfach den Schritt
 | Schlüssel | Gemini-API-Schlüssel (kostenlos, erforderlich) |
 | Optional | Groq-API-Schlüssel (kostenlos; schnellerer Chat, bessere Spracherkennung) |
 | Optional | NVIDIA-API-Schlüssel (kostenlos; Reserve-Chat, wenn Groq aufgebraucht ist) — https://build.nvidia.com |
+| Optional | Tavily-API-Schlüssel (kostenloses Monatskontingent; bessere Websuche) — https://app.tavily.com |
 
 ## 1. FENIX herunterladen
 

@@ -11,6 +11,7 @@ Toplam süre yaklaşık **15 dakika**. Bilgisayar bilgisi gerekmez; adımları s
 | Anahtar | Gemini API anahtarı (ücretsiz, zorunlu) |
 | İsteğe bağlı | Groq API anahtarı (ücretsiz; daha hızlı sohbet ve daha iyi ses tanıma) |
 | İsteğe bağlı | NVIDIA API anahtarı (ücretsiz; Groq dolunca yedek sohbet) — https://build.nvidia.com |
+| İsteğe bağlı | Tavily API anahtarı (ücretsiz aylık kota; daha iyi web araması) — https://app.tavily.com |
 
 ## 1. FENIX'i indir
 

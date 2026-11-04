@@ -46,6 +46,25 @@ _TIME_STAMP_RE = re.compile(
     r"(?:[ \t]*,[ \t]*[^\]\n]{0,14})?[ \t]*\]?[*_]*[ \t]*(?:\r?\n)*")
 
 
+BOZUK_CEVAP = ("Model bu sefer bozuk bir cevap üretti (anlamsız nokta ve yıldız dizisi), o yüzden göstermedim. "
+               "Bir daha sorar mısın? Uzun bir belge istiyorsan dosya adını .docx ya da .pdf olarak söylemen yeterli.")
+
+
+def bozuk_cevap_temizle(text):
+    """Model bazen sayfalarca '…', '**', '...' üretip çöküyor (04.11, PDF isteği). Harf oranı çok düşük uzun
+    cevaplar ekrana basılmaz; yerine kısa bir açıklama döner."""
+    t = text or ""
+    if len(t) < 300:
+        return t
+    harf = sum(ch.isalpha() for ch in t)
+    satirlar = [x.strip() for x in t.splitlines() if x.strip()]
+    cop = sum(1 for x in satirlar if sum(ch.isalpha() for ch in x) <= 3)
+    if harf / len(t) < 0.25 or (len(satirlar) >= 10 and cop / len(satirlar) > 0.6):
+        print(f"[GROQ] bozuk cevap atıldı ({len(t)} karakter, harf oranı {harf / len(t):.2f})")
+        return BOZUK_CEVAP
+    return t
+
+
 def strip_time_stamp(text):
     """Cevabın başındaki '[Şu an: ...]' damgasını (birden fazla kez yazılmışsa hepsini) temizler."""
     if not isinstance(text, str):
@@ -62,11 +81,15 @@ def _identity_block():
     from .version import VERSION
     root = os.path.abspath(".")
     return (
-        f"KİMLİK: Sen FENIX v{VERSION}'sün: kullanıcının kendi bilgisayarında çalışan, Mustafa Koç'un Claude (Anthropic) ile "
-        "birlikte adım adım geliştirdiği bir Python masaüstü uygulamasısın (CustomTkinter arayüz). Bir şirketin "
-        "bulut ürünü değilsin; 'OpenAI tarafından güncellenirim', 'kendi dosyam yok' gibi şeyler SÖYLEME. Dil "
-        "modelleri senin dışarıdan kullandığın beyinlerdir: sohbet ve araçlar Groq üzerindeki açık kaynak gpt-oss "
-        "modelleri, ekran görme ve hafıza Google Gemini. Model değişse de FENIX aynı uygulamadır.\n"
+        f"KİMLİK: Sen FENIX v{VERSION}'sün: kullanıcının kendi bilgisayarında çalışan, Mustafa Koç'un adım adım "
+        "geliştirdiği bir Python masaüstü uygulamasısın (CustomTkinter arayüz). (Geliştirirken kodlama yardımcısı olarak "
+        "Claude kullanıldı; sen çalışırken Claude'a, OpenAI'a ya da Anthropic'e BAĞLANMAZSIN.) Bir şirketin bulut "
+        "ürünü değilsin; 'OpenAI tarafından güncellenirim', 'kendi dosyam yok' gibi şeyler SÖYLEME. Dil modelleri "
+        "senin dışarıdan kullandığın beyinlerdir: sohbet ve araçlar Groq üzerindeki açık kaynak gpt-oss modelleri "
+        "(yedek: NVIDIA), ekran görme ve anlamsal hafıza Google Gemini. Model değişse de FENIX aynı uygulamadır.\n"
+        "KENDİN: Kendin, modların, özelliklerin, modellerin, gizlilik ya da sınırlamaların sorulduğunda veya kendini "
+        "anlatan bir belge istendiğinde ÖNCE fenix_hakkinda aracını çağır ve SADECE oradaki bilgileri kullan. Orada "
+        "olmayan bir özellik için 'emin değilim' de; dosya adlarını mod sanma, uydurma özellik/puan ekleme.\n"
         f"DOSYALARIN: proje klasörün {root}. app.py (arayüz); modules/ içinde functions.py (araçlar), "
         "llm_client.py (modeller ve bu talimat), agent.py (görev akışı), memory.py (hafıza), research.py (derin "
         "araştırma), web_analyzer.py (site analizi), pc_tools.py (PC araçları), command_memory.py (komut hafızası), "
@@ -90,14 +113,19 @@ def build_system_instruction(mode_key, mode_cfg):
         "terimleri normal orijinal yazımıyla yaz, fonetik uydurma.\n\n"
         "HAFIZA: Sana '[İlgili geçmiş bağlam]' başlığıyla bu sohbetin son mesajları ve kalıcı hafızandan "
         "(önceki sohbetler/günler ve kullanıcının notları) ilgili kayıtlar verilir; bu senin kalıcı hafızandır. "
-        "'oturumlar arası hafızam yok' gibi yanlış bir şey söyleme.\n\n"
+        "'oturumlar arası hafızam yok' gibi yanlış bir şey söyleme. '[Eski sohbet: ...]' ve '[Eski mesaj ...]' satırları "
+        "önceki sohbetlerden (JARVIS'ten aktarılanlar dahil) bulunan kayıtlardır; geçmiş bir konu sorulursa 'kayıt yok' "
+        "demeden önce bunlara bak ve oradaki bilgiyle cevap ver. Orada sadece kullanıcının mesajları varsa bunu belirt.\n\n"
         "HATALAR: Bir araç hata verirse hata metnini ASLA okuma ya da aktarma. Sadece "
         "'Bir hata ile karşılaştım, ayrıntıyı hata notlarına kaydettim.' de ve gerekirse "
         "ne yapılabileceğini kısaca öner. Ayrıntı sistem tarafından kaydedilir.\n\n"
         "WEB: Web sayfası okumak/aramak için ASLA run_command (PowerShell) kullanma; read_webpage ve "
         "search_web araçlarını kullan.\n\n"
-        "DOSYA OLUŞTURMA: Kod, HTML/CSS/JS, metin gibi bir dosya oluşturmak ya da doldurmak için HER ZAMAN write_file "
-        "kullan (path + content). run_command ile Set-Content / Out-File / @' ... '@ kullanarak dosyaya içerik yazma. "
+        "DOSYA OLUŞTURMA: Kod, HTML/CSS/JS, metin, Word (.docx) ya da PDF gibi bir dosya oluşturmak için HER ZAMAN "
+        "write_file kullan (path + content; Word/PDF için content Markdown). UZUN BELGE: önce gereken bilgiyi topla "
+        "(araştırma gerekiyorsa en fazla 3-4 arama), sonra belgeyi TEK SEFERDE eksiksiz yaz; yazdıktan sonra yeniden "
+        "araştırıp aynı belgeyi tekrar yazma. İstenen bölümlerin hepsini yaz, bilgi yoksa o bölüme 'bilgi bulunamadı' "
+        "yaz. run_command ile Set-Content / Out-File / @' ... '@ kullanarak dosyaya içerik yazma. "
         "Site gibi çok dosyalı işlerde her dosya için ayrı write_file çağır (ör. index.html, style.css, script.js). "
         "VAR OLAN bir dosyada küçük bir değişiklik için edit_file kullan, bütün dosyayı yeniden yazma. Büyük dosyada "
         "read_file önce içindekiler listesini verir; ilgili yeri find (ör. 'footer') ya da start_line/end_line ile oku.\n\n"
@@ -114,11 +142,25 @@ def build_system_instruction(mode_key, mode_cfg):
         "müdahaleleri SADECE kullanıcı açıkça istediğinde çağır; kendiliğinden yapma, teklif et.\n\n"
         "EKRAN: Kullanıcının ekranını görebilirsin: look_at_screen aracını çağır (ya da mesajda '[Ekranın şu "
         "anki görüntüsü]' tarifi gelir). 'Ekranını göremiyorum' DEME; araç hata verirse hatanın söylediği sebebi aktar.\n\n"
-        "BİÇİM: Cevaplar sesli okunur; markdown işaretleri (yıldız, diyez, tire çizgileri) ve TABLO (| ... |) "
-        "kullanma, düz yaz; karşılaştırma gerekirse kısa paragraflar ya da numaralı satırlar kullan. "
+        "BİÇİM: Sohbet cevapları sesli okunur; cevapta markdown işaretleri (yıldız, diyez, tire çizgileri) ve TABLO "
+        "(| ... |) kullanma, düz yaz (bu kural write_file ile yazılan .docx/.pdf/.md belge İÇERİĞİ için geçerli değil: "
+        "belgede # başlık, - madde ve | tablo | kullan); karşılaştırma gerekirse kısa paragraflar ya da numaralı satırlar kullan. "
         "Kaynak/adres listesi vereceksen en sona 'Kaynaklar:' başlığıyla yaz; bu bölüm sesli okunmaz, sadece yazıda kalır.\n\n"
         "GERİ BİLDİRİM: Kullanıcı teşekkür eder ya da önceki cevap hakkında yorum yaparsa yeni bir araştırma "
         "başlatma; kısaca karşılık ver ve isteğini (ör. biçim tercihi) not et.\n\n"
+        "BAĞLAM: Konuşmanın akışını takip et. Öznesi olmayan kısa takip sorularını ('maili var mı', 'o ne zaman "
+        "çıktı', 'peki fiyatı') bir önceki konuya bağla: 'Seni kim yarattı?' sorusundan sonra gelen 'maili var mı' "
+        "yaratıcıyı sorar, seni değil. Gerçekten iki anlama gelebiliyorsa tahmin etme, tek cümleyle sor (ör. "
+        "'Mustafa Koç'un mu, benim mi?').\n\n"
+        "GERÇEKÇİLİK: Bir fikir, plan ya da istek değerlendirirken önce olabilirliğine bak, tonuna sonra karar ver. "
+        "'Harika fikir', 'kesinlikle yapabilirsin', 'mükemmel soru' gibi övgü ve onay cümleleriyle başlama; övgü "
+        "ancak somut bir gerekçesi varsa yapılır. Plan, hedef ya da 'bu olur mu' sorulduğunda kısaca: olabilirlik "
+        "(yüksek / orta / düşük), en büyük 1-3 engel, gerekenler (zaman, para, beceri) ve ilk somut adım. Olmayacak "
+        "ya da çok zor bir şeyse açıkça söyle, nedenini ver, sonra yapılabilir bir alternatif öner. Bildiğinle "
+        "tahminini ayır ('kesin', 'muhtemelen', 'emin değilim'). Kullanıcı itiraz ederse yeni bir bilgi ya da "
+        "gerekçe sunmadıkça görüşünü değiştirme; sadece ısrar edildi diye 'haklısın' deme. Kullanıcının yanlış "
+        "bildiği bir şey varsa nazikçe düzelt. Gerçekçi olmak kaba olmak değildir: sakin ve destekleyici ol, ama "
+        "yanıltma.\n\n"
         "ZAMAN: Her mesajın başında '[Şu an: ...]' ile güncel tarih ve saat verilir; tarih/saat hesaplarını "
         "(hatırlatmalar, 'yarın', 'iki saat sonra') buna göre yap. Bu satır sadece senin içindir: cevabına "
         "ASLA '[Şu an: ...]' yazma ya da kopyalama. Kullanıcı saati sorarsa doğal bir cümleyle söyle.\n\n"
@@ -162,6 +204,12 @@ def build_system_instruction(mode_key, mode_cfg):
             "gerekirse bulduğun linklerden devam et. Sonunda okuduğun kaynakları listeleyerek derli toplu "
             "bir rapor ver. open_url yalnızca kullanıcı 'aç' dediğinde kullanılır."
         )
+    elif mode_key == "ogrenme":                 # yalnızca özel sürümde bulunan mod
+        try:
+            from . import ogrenme
+            base += ogrenme.MODE_PROMPT
+        except ImportError:
+            pass
     return base + "\n\n" + i18n.reply_rule()
 
 
@@ -263,6 +311,13 @@ class LLMClient:
         self._cooldown = {}   # (anahtar sırası, model) -> (bu zamana kadar deneme, sebep metni)
         self._chats = {}  # (mode_key, model) -> gemini chat session (araçlı)
         self._groq_hist = {}  # mode_key -> Groq mesaj geçmişi (araçlı sohbet için)
+        # Ortak sohbet kaydı (04.11): hangi yoldan (Groq, Gemini/ekran, derin araştırma, komut hafızası) ve hangi
+        # modda cevap verilirse verilsin, bir sonraki mesajı cevaplayan yol önceki konuşmayı görür. Önceden ekran
+        # cevabı (Gemini) Groq geçmişine girmiyordu, mod değişince de konuşma kayboluyordu.
+        self._ortak = []          # [{"id", "user", "assistant", "kaynak"}]
+        self._ortak_no = 0
+        self._gorulen = {}        # kaynak -> gördüğü son kayıt numarası
+        self._son_kaynak = None   # son cevabı üreten yol (kendi geçmişinde zaten var)
         self._recent_tools = {}  # mode_key -> son istekte kullanılan araç adları
         self.last_calls = []     # son ask() sırasında çalışan araçlar: [(ad, argümanlar, sonuç)] (komut hafızası öğrenir)
         fx.set_vision_handler(self.describe_image)
@@ -448,6 +503,7 @@ class LLMClient:
             if re.search(pat, t):
                 names |= group
         names |= self._recent_tools.get(mode_key, set())
+        names |= set(getattr(self, "_extra_tools", None) or ())     # yol hafızasının önerdiği araçlar
         return names & self._allowed(mode_cfg)
 
     def _groq_tools(self, mode_cfg=None, only=None):
@@ -490,6 +546,9 @@ class LLMClient:
                                        types.Part.from_text(text=prompt)]).text or "(boş tarif)",
             what="görüntü modeli")
 
+    _KESIF_ARACLARI = {"search_web", "read_webpage", "find_files", "list_folder", "read_file", "open_url",
+                       "inspect_website_security", "look_at_screen", "open_folder_by_name"}
+
     @staticmethod
     def _trim_hist(hist, max_msgs=14, max_chars=2500, last_max=None):
         """Gönderilecek geçmiş: son max_msgs mesaj, bir KULLANICI mesajıyla başlar (yoksa araç yanıtı
@@ -498,7 +557,13 @@ class LLMClient:
         while part and part[0].get("role") != "user":
             part = part[1:]
         if not part:
-            part = hist[-1:]
+            # Uzun araç zinciri (7+ tur): pencerede kullanıcı mesajı kalmadı. Görevi unutmasın diye son
+            # kullanıcı mesajı başa konur, ardından araç çağrısıyla başlayan son turlar gelir.
+            son_u = max((i for i, m in enumerate(hist) if m.get("role") == "user"), default=None)
+            kuyruk = hist[-(max_msgs - 1):] if max_msgs > 1 else []
+            while kuyruk and kuyruk[0].get("role") != "assistant":
+                kuyruk = kuyruk[1:]
+            part = ([hist[son_u]] if son_u is not None else []) + kuyruk or hist[-1:]
         out = []
         for i, m in enumerate(part):
             c = m.get("content") or ""
@@ -527,25 +592,64 @@ class LLMClient:
         return out
 
     def _groq_agent_chat(self, mode_key, mode_cfg, user_text, memory_context=""):
+        out = self._groq_agent_chat_ic(mode_key, mode_cfg, user_text, memory_context)
+        self._son_kaynak = ("groq", mode_key)          # bu konuşma artık bu modun geçmişinde
+        return out
+
+    def _groq_agent_chat_ic(self, mode_key, mode_cfg, user_text, memory_context=""):
         """Groq üzerinden araç çağırmalı sohbet (OpenAI uyumlu function calling).
         Mesaj geçmişi mod başına tutulur; araç sonuçları modele geri verilir."""
         hist = self._groq_hist.setdefault(mode_key, [])
+        # Geçmişe yalnızca kullanıcının asıl mesajı yazılır. Hafıza bağlamı sadece o anki mesaja eklenir;
+        # önceden bağlam her mesajın başına yazılıyordu ve geçmiş kısaltılırken eski SORULAR kesilip atılıyordu
+        # (ör. "Seni kim yarattı?" kayboluyor, ardından gelen "Maili var mı?" yanlış anlaşılıyordu).
+        kaynak = ("groq", mode_key)
+        for e in self._ortak_eksik(kaynak):              # başka yoldan/moddan yapılan konuşmalar
+            hist.append({"role": "user", "content": e["user"]})
+            hist.append({"role": "assistant", "content": self._kisalt(e["assistant"])})
         content = user_text
-        if memory_context:
-            content = f"[İlgili geçmiş bağlam]\n{memory_context}\n\n{user_text}"
         hist.append({"role": "user", "content": content})
+
+        def with_ctx(msgs):
+            if not memory_context:
+                return msgs
+            out = list(msgs)
+            for i in range(len(out) - 1, -1, -1):      # son kullanıcı mesajı = bu turun mesajı
+                if out[i].get("role") == "user":
+                    out[i] = dict(out[i], content=f"[İlgili geçmiş bağlam]\n{memory_context}\n\n"
+                                                  f"[Kullanıcının şu anki mesajı]\n{out[i].get('content') or ''}")
+                    break
+            return out
         selected = self._select_tools(mode_key, mode_cfg, user_text)
         tools = self._groq_tools(mode_cfg, only=selected)
         used = set()
         system = {"role": "system", "content": build_system_instruction(mode_key, mode_cfg)}
         ep = mode_cfg.get("_endpoint", "groq")
         try:
-            for _ in range(12 if mode_key == "devil" else 6):   # araç turu sınırı (Devil: derin araştırma)
-                payload = {"model": mode_cfg["groq_model"], "messages": [system] + self._trim_hist(hist),
+            tur = getattr(self, "tur_siniri", None) or (12 if mode_key == "devil" else 8 if mode_key == "ogrenme" else 6)
+            for tur_no in range(tur):   # araç turu sınırı (Devil: derin araştırma)
+                payload = {"model": mode_cfg["groq_model"], "messages": [system] + with_ctx(self._trim_hist(hist)),
                            "temperature": 0.6}
+                kalan = tur - tur_no
+                if used and kalan <= 2:
+                    # 04.11: belge isteğinde 6 turun hepsi aramaya gitti, dosya hiç yazılmadı. Son turlarda model
+                    # uyarılır: yeni araştırma yok, eldekiyle işi bitir.
+                    payload["messages"].append({"role": "system", "content": (
+                        f"UYARI: Araç turu hakkının sonundasın (kalan {kalan}). Yeni arama ya da keşif yapma. "
+                        "Topladığın bilgiyle işi ŞİMDİ bitir: dosya/belge istendiyse hemen yaz (eksik kalan yerlere "
+                        "'araştırılamadı' yaz), değilse cevabı ver.")})
                 if tools:
                     payload["tools"] = tools
                     payload["tool_choice"] = "auto"
+                    if used and kalan <= 2:
+                        # Uyarı yetmeyebiliyor (04.11, ikinci deneme: yine 6 arama). Son iki turda arama/keşif
+                        # araçları hiç verilmez: model ya yazar ya cevap verir.
+                        son_araclar = [t for t in tools if t.get("function", {}).get("name") not in self._KESIF_ARACLARI]
+                        if son_araclar:
+                            payload["tools"] = son_araclar
+                        else:
+                            payload.pop("tools", None)
+                            payload.pop("tool_choice", None)
                 try:
                     msg = self._groq_post(payload, endpoint=ep)["choices"][0]["message"]
                 except requests.HTTPError as he:
@@ -554,7 +658,7 @@ class LLMClient:
                     if code in (413, 429) or "too large" in body.lower() or "tokens" in body.lower():
                         # İstek çok büyük / dakikalık token sınırı: kısa geçmiş ve yalnızca temel araçlarla bir kez daha
                         print(f"[GROQ] istek büyük/sınırda ({code}), küçültülüp yeniden deneniyor")
-                        payload["messages"] = [system] + self._trim_hist(hist, max_msgs=4, max_chars=800,
+                        payload["messages"] = [system] + self._trim_hist(hist, max_msgs=6, max_chars=800,
                                                                          last_max=2500)
                         if tools:
                             payload["tools"] = self._groq_tools(mode_cfg, only=selected & (self._CORE_TOOLS | used))
@@ -564,7 +668,7 @@ class LLMClient:
                         print("[GROQ] şablon hatası, geçmiş temizlenip yeniden deneniyor")
                         del hist[:-1]
                         used.clear()
-                        payload["messages"] = [system] + self._trim_hist(hist)
+                        payload["messages"] = [system] + with_ctx(self._trim_hist(hist))
                         msg = self._groq_post(payload, endpoint=ep)["choices"][0]["message"]
                     else:
                         fx.report_error("NVIDIA" if ep == "nvidia" else "Groq", f"{code}: {body}")
@@ -586,7 +690,7 @@ class LLMClient:
                 if not calls:
                     if not used:
                         self._recent_tools.pop(mode_key, None)
-                    return strip_time_stamp(msg.get("content") or "") or "Tamamlandı."
+                    return bozuk_cevap_temizle(strip_time_stamp(msg.get("content") or "")) or "Tamamlandı."
                 for call in calls:
                     name = call["function"]["name"]
                     used.add(name)
@@ -595,8 +699,11 @@ class LLMClient:
                         args = json.loads(call["function"].get("arguments") or "{}")
                     except Exception:
                         args = {}
+                    verilen = {t.get("function", {}).get("name") for t in payload.get("tools") or []}
                     if name not in fx.WHITELISTED_FUNCTIONS or name not in self._allowed(mode_cfg):
                         result = {"status": "error", "message": "Bu işlem bu modda yapılamaz."}
+                    elif payload.get("tools") is not None and name not in verilen and kalan <= 2:
+                        result = {"status": "error", "message": "Arama hakkın bitti; topladığın bilgiyle işi bitir."}
                     else:
                         try:
                             result = fx.WHITELISTED_FUNCTIONS[name](**args)
@@ -606,7 +713,28 @@ class LLMClient:
                     self.last_calls.append((name, args, result))
                     hist.append({"role": "tool", "tool_call_id": call["id"],
                                  "content": tool_result_text(result)})
-            return "İşlem çok adım sürdü, burada durdum."
+            # Tur hakkı bitti: araçsız son bir istekle model yaptığını özetler (son turda dosya yazılmış olabilir).
+            try:
+                payload = {"model": mode_cfg["groq_model"], "temperature": 0.4,
+                           "messages": [system] + with_ctx(self._trim_hist(hist, max_msgs=8, max_chars=800,
+                                                                           last_max=2500)) + [{"role": "system", "content": (
+                               "Araç hakkın bitti. Araç çağırma. Kullanıcıya kısaca ne yaptığını, neyin tamamlandığını "
+                               "ve neyin yarım kaldığını söyle.")}]}
+                ozet = (self._groq_post(payload, endpoint=ep)["choices"][0]["message"].get("content") or "").strip()
+                if ozet:
+                    hist.append({"role": "assistant", "content": strip_time_stamp(ozet)})
+                    return bozuk_cevap_temizle(strip_time_stamp(ozet)) + "\n\n(Adım sınırına ulaşıldı.)"
+            except Exception as e:
+                print(f"[GROQ] son özet alınamadı: {e}")
+            from collections import Counter
+            sayim = Counter(n for n, _, _ in self.last_calls)
+            ozet = ", ".join(f"{k} ×{v}" for k, v in sayim.most_common()) or "yok"
+            yazildi = any(n in ("write_file", "edit_file") and isinstance(r, dict) and r.get("status") == "ok"
+                          for n, _, r in self.last_calls)
+            return (f"Adım sınırına ulaştım ({tur} adım). Kullandığım araçlar: {ozet}. "
+                    + ("Dosya yazıldı." if yazildi else "Dosya/belge yazılamadı.")
+                    + (" Daha uzun işler için Devil modunu dene." if mode_key != "devil" else "")
+                    + "\n\n(Adım sınırına ulaşıldı.)")
         except Exception:
             # Yarım kalmış tur geçmişi bozmasın: son kullanıcı mesajından itibaren temizle
             while hist and not (hist[-1].get("role") == "user" and hist[-1].get("content") == content):
@@ -700,6 +828,11 @@ class LLMClient:
         chat = self._chats[session_key]
 
         parts = []
+        kaynak = ("gemini",) + tuple(session_key)
+        eksik = self._ortak_eksik(kaynak)
+        if eksik:                                    # ör. Groq'la yapılan son konuşmalar (ekran isteğinden önce)
+            parts.append(types.Part.from_text(text="[Son konuşma — bunlar seninle yapıldı, devamı soruluyor olabilir]\n"
+                         + "\n".join(f"Kullanıcı: {e['user']}\nFENIX: {self._kisalt(e['assistant'])}" for e in eksik)))
         if memory_context:
             parts.append(types.Part.from_text(text=f"[İlgili geçmiş bağlam]\n{memory_context}\n"))
         parts.append(types.Part.from_text(text=user_text))
@@ -708,7 +841,9 @@ class LLMClient:
             parts.append(types.Part.from_bytes(data=base64.b64decode(img), mime_type="image/jpeg"))
 
         response = chat.send_message(parts)
-        return self._handle_gemini_response(chat, response, mode_cfg)
+        out = self._handle_gemini_response(chat, response, mode_cfg)
+        self._son_kaynak = kaynak
+        return out
 
     def _handle_gemini_response(self, chat, response, mode_cfg):
         fcs = getattr(response, "function_calls", None)
@@ -731,6 +866,31 @@ class LLMClient:
             return self._handle_gemini_response(chat, follow, mode_cfg)
         return response.text
 
+    ORTAK_MAX = 40
+    ORTAK_CEVAP_MAX = 3000
+
+    def ortak_kaydet(self, user_text, reply, kaynak=None):
+        """Tamamlanan bir konuşmayı ortak kayda yazar. kaynak: cevabı üreten yol (onun geçmişinde zaten var)."""
+        u, a = (user_text or "").strip(), (reply or "").strip()
+        if not (u and a):
+            return
+        self._ortak_no += 1
+        self._ortak.append({"id": self._ortak_no, "user": u, "assistant": a, "kaynak": kaynak})
+        del self._ortak[:-self.ORTAK_MAX]
+        if kaynak is not None:
+            self._gorulen[kaynak] = self._ortak_no
+
+    def _ortak_eksik(self, kaynak, en_fazla=6):
+        """Bu yolun henüz görmediği (başka yoldan/moddan yapılmış) son konuşmalar; görüldü olarak işaretler."""
+        son = self._gorulen.get(kaynak, 0)
+        eksik = [e for e in self._ortak if e["id"] > son and e["kaynak"] != kaynak]
+        if self._ortak:
+            self._gorulen[kaynak] = self._ortak[-1]["id"]
+        return eksik[-en_fazla:]
+
+    def _kisalt(self, t):
+        return t if len(t) <= self.ORTAK_CEVAP_MAX else t[:self.ORTAK_CEVAP_MAX] + " …(kısaltıldı)"
+
     def remember_exchange(self, mode_key, user_text, reply):
         """Yapay zekâya sormadan (komut hafızasıyla) yapılan bir komutu sohbet geçmişine yazar; sonraki mesajlarda
         ('biraz daha', 'geri al') bağlam eksik kalmasın."""
@@ -738,6 +898,7 @@ class LLMClient:
         hist.append({"role": "user", "content": user_text})
         hist.append({"role": "assistant", "content": reply})
         del hist[:-40]
+        self._son_kaynak = ("groq", mode_key)
 
     def compact_last_user(self, mode_key, short_text):
         """Ekli dosya içeriği sohbet geçmişinde kalıp sonraki her istekte tekrar gönderilmesin
@@ -748,7 +909,15 @@ class LLMClient:
                 m["content"] = short_text
                 break
 
-    def reset_mode_session(self, mode_key=None):
+    def reset_mode_session(self, mode_key=None, ortak_koru=False):
+        """ortak_koru=True (mod değişimi): model oturumları sıfırlanır ama konuşma korunur; yeni mod, ortak
+        kayıttaki son konuşmaları görür. Yeni sohbet/sohbet açma: her şey sıfırlanır."""
+        if ortak_koru:
+            self._chats.clear()
+            self._groq_hist.clear()
+            self._recent_tools.clear()
+            self._gorulen.clear()
+            return
         if mode_key:
             self._groq_hist.pop(mode_key, None)
             self._recent_tools.pop(mode_key, None)
@@ -758,6 +927,8 @@ class LLMClient:
             self._chats.clear()
             self._groq_hist.clear()
             self._recent_tools.clear()
+            self._ortak.clear()
+            self._gorulen.clear()
 
     # --- ANA GİRİŞ ---
     def ask(self, mode_key, mode_cfg, user_text, screenshot_b64=None, memory_context=""):

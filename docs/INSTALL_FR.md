@@ -11,6 +11,7 @@ Environ **15 minutes**. Aucune connaissance technique requise ; suivez simplemen
 | Clé | Clé API Gemini (gratuite, obligatoire) |
 | Facultatif | Clé API Groq (gratuite ; discussion plus rapide, meilleure reconnaissance vocale) |
 | Facultatif | Clé API NVIDIA (gratuite ; discussion de secours quand Groq est épuisé) — https://build.nvidia.com |
+| Facultatif | Clé API Tavily (quota mensuel gratuit ; meilleure recherche web) — https://app.tavily.com |
 
 ## 1. Télécharger FENIX
 

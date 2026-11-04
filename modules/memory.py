@@ -2,6 +2,7 @@
 """Akıl ve Hafıza: SQLite (ham geçmiş) + ChromaDB (semantik arama, Gemini
 embedding ile - bulutta, RAM dostu). Ayrıca günlük özet için kayıt sorgulama."""
 import os
+import re
 import sqlite3
 import datetime
 import threading
@@ -17,6 +18,36 @@ class _NullCollection:
 
     def query(self, *a, **k):
         return {"documents": [[]]}
+
+    def delete(self, *a, **k):
+        return None
+
+
+class _PendingCollection:
+    """Anlamsal hafıza arka planda yüklenirken: yazma/silme işlemleri sıraya alınır (yüklenince uygulanır),
+    arama boş döner (bu sırada kelime araması ve son mesajlar yine çalışır)."""
+    def __init__(self):
+        self.ops = []
+        self.lock = threading.Lock()
+
+    def add(self, *a, **k):
+        with self.lock:
+            self.ops.append(("add", a, k))
+
+    def delete(self, *a, **k):
+        with self.lock:
+            self.ops.append(("delete", a, k))
+
+    def query(self, *a, **k):
+        return {"documents": [[]]}
+
+
+def chroma_client(path):
+    """Kalıcı Chroma istemcisi; chromadb'nin anonim kullanım verisi gönderimi KAPALI (FENIX'te telemetri yok)."""
+    os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+    import chromadb
+    from chromadb.config import Settings
+    return chromadb.PersistentClient(path=path, settings=Settings(anonymized_telemetry=False))
 
 
 class GeminiEmbeddingFunction:
@@ -80,7 +111,7 @@ class _LockedConn:
 
 class Memory:
     def __init__(self, db_path="data/fenix_memory.db", chroma_path="data/chroma_db", gemini_api_key=None,
-                 cross_chat=True, semantic=True):
+                 cross_chat=True, semantic=True, defer_semantic=False):
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
         self.conn = _LockedConn(db_path)
         self.current_session_id = None      # arayüzde açık olan sohbet
@@ -98,20 +129,47 @@ class Memory:
             self.embed_fn = None
             self.collection = _NullCollection()
             return
-        import chromadb
-        from chromadb.utils import embedding_functions
-        self.chroma = chromadb.PersistentClient(path=chroma_path)
-        if gemini_api_key:
-            try:
-                self.embed_fn = GeminiEmbeddingFunction(api_key=gemini_api_key)
-            except Exception as e:
-                print(f"[HAFIZA UYARI] Gemini embedding başlatılamadı: {e}")
+        # Anlamsal hafıza (chromadb + Gemini) yüklenmesi birkaç saniye sürer: pencere beklemesin diye arka planda
+        # yüklenir. Bu sırada yazılanlar sıraya alınır, yüklenince eklenir.
+        self.chroma = None
+        self.embed_fn = None
+        self.collection = _PendingCollection()
+        self.semantic_ready = threading.Event()
+        self._semantic_args = (chroma_path, gemini_api_key)
+        if not defer_semantic:                  # arayüz True verir ve pencere çizildikten sonra start_semantic() çağırır
+            self.start_semantic()
+
+    def start_semantic(self):
+        args, self._semantic_args = getattr(self, "_semantic_args", None), None
+        if args:
+            threading.Thread(target=self._load_semantic, args=args, daemon=True).start()
+
+    def _load_semantic(self, chroma_path, gemini_api_key):
+        pending = self.collection
+        try:
+            self.chroma = chroma_client(chroma_path)
+            from chromadb.utils import embedding_functions
+            if gemini_api_key:
+                try:
+                    self.embed_fn = GeminiEmbeddingFunction(api_key=gemini_api_key)
+                except Exception as e:
+                    print(f"[HAFIZA UYARI] Gemini embedding başlatılamadı: {e}")
+                    self.embed_fn = embedding_functions.DefaultEmbeddingFunction()
+            else:
                 self.embed_fn = embedding_functions.DefaultEmbeddingFunction()
-        else:
-            self.embed_fn = embedding_functions.DefaultEmbeddingFunction()
-        self.collection = self.chroma.get_or_create_collection(
-            name="fenix_memories", embedding_function=self.embed_fn
-        )
+            real = self.chroma.get_or_create_collection(name="fenix_memories", embedding_function=self.embed_fn)
+        except Exception as e:
+            print(f"[HAFIZA UYARI] Anlamsal hafıza açılamadı, yalnızca kelime araması kullanılacak: {e}")
+            real = _NullCollection()
+        with pending.lock:
+            ops, pending.ops = pending.ops, []
+            self.collection = real
+        for kind, a, k in ops:              # yüklenirken gelen kayıtlar
+            try:
+                getattr(real, kind)(*a, **k)
+            except Exception as e:
+                print(f"[HAFIZA UYARI] bekleyen kayıt eklenemedi: {e}")
+        self.semantic_ready.set()
 
     def _init_db(self):
         self.conn.execute("""CREATE TABLE IF NOT EXISTS conversations (
@@ -290,6 +348,55 @@ class Memory:
         except Exception:
             return []
 
+    # Kelimeyle arama için anlamsız kelimeler (gövdeleri; "konuşmuştuk", "hatırlıyor musun" vb. hepsini yakalar)
+    _KW_STOP = ("hakkında", "hakkinda", "konuş", "konus", "hatırl", "hatirl", "biliyor", "musun", "misin", "mısın",
+                "neler", "nedir", "neydi", "nasıl", "nasil", "şeyler", "seyler", "daha", "önce", "once", "geçen",
+                "gecen", "bana", "benim", "senin", "bizim", "için", "icin", "gibi", "olan", "bunu", "şunu", "sunu",
+                "söyle", "soyle", "anlat", "proje", "konu", "sohbet", "yazdı", "yazdi", "dedi", "dedin", "demiştim",
+                "demistim", "neyi", "kadar", "ilgili", "about", "what", "talk", "remember")
+
+    def keyword_search(self, query, limit=4, item_chars=300):
+        """Anlamsal arama bulamasa da çalışan yedek: sohbet BAŞLIKLARINDA ve eski mesajlarda kelimeyle arar
+        (Gemini gerektirmez). Ör. 'Kargocu projesi hakkında ne konuşmuştuk?' -> başlığında 'kargo' geçen sohbet."""
+        if self.incognito or not self.cross_chat:
+            return []
+        low = (query or "").replace("İ", "i").replace("I", "ı").lower()
+        words = []
+        for w in re.findall(r"[a-zçğıöşü0-9]{4,}", low):
+            if any(w.startswith(st) for st in self._KW_STOP) or w in words:
+                continue
+            words.append(w)
+        stems = [w[:max(4, len(w) - 3)] for w in words[:6]]      # 'kargocu' -> 'kargo', 'bootstrap' -> 'bootst'
+        if not stems:
+            return []
+
+        def fold(t):
+            return (t or "").replace("İ", "i").replace("I", "ı").lower()
+        out, shown = [], set()
+        try:
+            sessions = self.conn.execute("SELECT id, title, created FROM sessions ORDER BY updated DESC").fetchall()
+            hits = [(sum(st in fold(t) for st in stems), sid, t, c) for sid, t, c in sessions
+                    if sid != self.current_session_id]
+            for score, sid, title, created in sorted([h for h in hits if h[0]], key=lambda h: -h[0])[:2]:
+                msgs = self.conn.execute("SELECT content FROM conversations WHERE session_id=? AND role='user' "
+                                         "ORDER BY id LIMIT 4", (sid,)).fetchall()
+                shown.add(sid)
+                said = " | ".join(" ".join((m[0] or "").split())[:140] for m in msgs)
+                out.append(f"[Eski sohbet: {title} • {(created or '')[:10]}] Kullanıcının mesajları: {said}"[:item_chars * 2])
+            if len(out) < limit:
+                cond = " OR ".join(["content LIKE ?"] * len(stems))
+                rows = self.conn.execute(
+                    f"SELECT c.content, c.timestamp, s.title, c.session_id FROM conversations c LEFT JOIN sessions s ON s.id = c.session_id "
+                    f"WHERE ({cond}) AND (c.session_id IS NULL OR c.session_id != ?) ORDER BY c.id DESC LIMIT 40",
+                    tuple(f"%{st}%" for st in stems) + (self.current_session_id or -1,)).fetchall()
+                ranked = sorted([r for r in rows if r[3] not in shown], key=lambda r: -sum(st in fold(r[0]) for st in stems))
+                for content, ts, title, _sid in ranked[:limit - len(out)]:
+                    t = " ".join((content or "").split())[:item_chars]
+                    out.append(f"[Eski mesaj • {title or 'sohbet'} • {(ts or '')[:10]}] {t}")
+        except Exception as e:
+            print(f"[HAFIZA] kelime araması yapılamadı: {e}")
+        return out
+
     def get_context(self, query, recent_limit=6, semantic_limit=4, item_chars=400):
         """Bağlam = bu sohbetin son mesajları + anlamca ilgili kayıtlar (sohbete özel modda yalnızca bu
         sohbetten ve notlardan; cross_chat açıksa tüm sohbetlerden)."""
@@ -298,12 +405,20 @@ class Memory:
             return t if len(t) <= item_chars else t[:item_chars] + "…"
         recent = [cut(f"{r}: {c}") for r, c in self.get_recent(recent_limit)]
         semantic = [cut(x) for x in self.search_memory(query, semantic_limit)]
+        keyword = self.keyword_search(query)        # anlamsal arama kaçırsa da başlık/kelime eşleşmesi gelir
         out, seen = [], set()
-        for t in recent + semantic:
+        for t in recent + semantic + keyword:
             if t and t not in seen:
                 seen.add(t)
                 out.append(t)
         text = "\n".join(out)
+        try:                                    # özel sürüm: öğrenme alanında edinilen dersler TÜM modlarda bağlama girer
+            from . import ogrenme
+            lessons = ogrenme.lessons_for(query)
+            if lessons:
+                text = (text + "\n\n" + lessons).strip()
+        except ImportError:
+            pass
         return text
 
     # ---------------- NOTLAR ----------------

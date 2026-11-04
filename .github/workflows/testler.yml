@@ -1,0 +1,22 @@
+# FENIX otomatik testleri: her push ve pull request'te Windows'ta çalışır.
+name: Testler
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test kütüphanelerini kur
+        run: python -m pip install -r requirements-dev.txt
+      - name: Testleri çalıştır
+        run: python -m pytest tests -q

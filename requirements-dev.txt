@@ -1,0 +1,9 @@
+# Otomatik testler için gereken paketler (FENIX'in kendisi için requirements.txt yeterli)
+pytest
+PyYAML
+requests
+beautifulsoup4
+python-docx
+reportlab
+pypdf
+mcp>=2.3,<3
