@@ -1,8 +1,10 @@
 # Third-party notices / Üçüncü taraf bildirimleri
 
-FENIX's own code is © 2026 Mustafa Koç, all rights reserved (see [LICENSE](LICENSE)). FENIX does **not** include
+FENIX's own code is © 2026 Mustafa Koç, licensed under GPL-3.0-only with additional terms (see [LICENSE](LICENSE)
+and [NOTICE.md](NOTICE.md)). All libraries below are GPL-3.0-compatible. FENIX does **not** include
 copies of the libraries below; `Setup.bat` downloads them from PyPI, and each keeps its own license.
-FENIX'in kendi kodu © 2026 Mustafa Koç'a aittir. Aşağıdaki kütüphaneler pakete **dahil değildir**; `Setup.bat` bunları
+FENIX'in kendi kodu © 2026 Mustafa Koç'a aittir ve GPL-3.0-only ile ek şartlarla lisanslıdır (LICENSE, NOTICE.md);
+aşağıdaki kütüphanelerin hepsi GPL-3.0 ile uyumludur. Aşağıdaki kütüphaneler pakete **dahil değildir**; `Setup.bat` bunları
 PyPI'dan indirir ve her biri kendi lisansına tabidir.
 
 | Package | License |
@@ -50,4 +52,6 @@ tarafından desteklenmez**. Servisler her kullanıcının kendi hesabıyla ve sa
 ## Icon / Simge
 
 The FENIX icon (`fenix.ico`, `assets/fenix.png`) is original artwork made for this project and is covered by the
-FENIX license. / FENIX simgesi bu proje için çizilmiş özgün bir görseldir ve FENIX lisansına tabidir.
+FENIX license; its use as the name/brand of a modified version is not permitted (NOTICE.md, term 3). / FENIX simgesi
+bu proje için çizilmiş özgün bir görseldir ve FENIX lisansına tabidir; değiştirilmiş bir sürümün adı/markası olarak
+kullanılamaz (NOTICE.md, 3. şart).

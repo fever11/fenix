@@ -1,6 +1,11 @@
 # Changelog / Değişiklik günlüğü
 
 ## 1.2.1 — 2026-11-04
+- **TR:** Lisans GNU GPL v3'e (GPL-3.0-only) geçti, ek şartlar `NOTICE.md`'de: FENIX'i herkes kullanabilir,
+  değiştirebilir ve paylaşabilir; değişiklikler aynı lisansla açık kalır, "Mustafa Koç'un FENIX projesine dayanır" atfı
+  korunur, FENIX kimsenin kendi eseri gibi sunulamaz ve değiştirilmiş sürümler başka bir ad kullanır.
+- **EN:** License changed to GNU GPL v3 (GPL-3.0-only) with additional terms in `NOTICE.md` (attribution, no
+  misrepresentation of origin, modified versions use a different name).
 - **TR:** Sohbet artık kopmuyor: hangi yoldan (Groq, ekran/Gemini, derin araştırma, komut hafızası) ve hangi modda
   cevap verilirse verilsin, bir sonraki mesaj önceki konuşmayı görür. Önceden "ekranıma bak" cevabı Groq'un
   geçmişine girmiyordu ve mod değiştirince bütün konuşma siliniyordu.

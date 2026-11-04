@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """Kendini tanı (v1.2.1).
 
 FENIX'in modeli FENIX'in kodunu göremez; kendisi sorulunca tahmin ediyordu (04.11 testi: modları dosya adlarıyla
@@ -68,6 +68,9 @@ def _kimlik():
             "Tür: Windows için Python masaüstü asistanı (CustomTkinter arayüz), kullanıcının kendi bilgisayarında çalışır; "
             "bir şirketin bulut ürünü değil, tek kişilik bir proje.",
             "Arayüz dilleri: " + ", ".join(dict.fromkeys(diller)) + ".",
+            "Lisans: GNU GPL v3 (GPL-3.0-only) ve ek şartlar (NOTICE.md): herkes kullanabilir, değiştirebilir, paylaşabilir; "
+            "ama aynı lisansla, Mustafa Koç'un adı korunarak, başka bir adla ve kendi eseri gibi sunmadan. Garanti yoktur. "
+            "Resmi kaynak: github.com/fever11/fenix.",
             ("Otomatik test paketi var (tests/ klasörü; her güncellemede GitHub Actions'ta çalışır)." if testler else
              "Bu kurulumda test klasörü yok.")]
 

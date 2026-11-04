@@ -3,9 +3,9 @@
 Depo şu an **Private**. Public yapmaya karar verdiğinde bu listeyi sırayla geç.
 
 ## Hukuk ve sahiplik (hazır)
-- [x] `LICENSE`: Tüm hakları saklıdır / Kişisel Kullanım Lisansı (TR + EN)
+- [x] `LICENSE`: GNU GPL v3 (GPL-3.0-only) resmi metni; ek şartlar (atıf, köken, ad) `NOTICE.md`'de (TR + EN)
 - [x] `AUTHORS.md`: yazar, ilk sürüm tarihi, JARVIS kökeni, yapay zekâ desteği beyanı
-- [x] `THIRD_PARTY_NOTICES.md`: kütüphane lisansları (hepsi bu lisansla uyumlu), marka uyarısı
+- [x] `THIRD_PARTY_NOTICES.md`: kütüphane lisansları (hepsi GPL-3.0 ile uyumlu), marka uyarısı
 - [x] `PRIVACY.md`, `SECURITY.md`, `CONTRIBUTING.md`
 - [x] Kaynak dosyalarda imza satırı, PDF/Word ve ikon bilgilerinde yazar adı
 - [x] Pakette anahtar, e-posta, kişisel veri yok

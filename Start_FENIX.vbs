@@ -1,4 +1,4 @@
-' Core: MK-Agentic-System - Powered by FENIX Engine - (c) 2026 Mustafa Koc - All rights reserved
+' Core: MK-Agentic-System - Powered by FENIX Engine - (c) 2026 Mustafa Koc - GPL-3.0-only (LICENSE, NOTICE.md)
 ' FENIX - Tek tikla baslatici / one-click launcher (no console window)
 Dim fso, scriptDir, shell, pythonwPath, mainScript
 Set fso = CreateObject("Scripting.FileSystemObject")

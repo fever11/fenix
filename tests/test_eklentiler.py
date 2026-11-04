@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """Eklentiler (MCP): şema temizleme, araç adları ve sahte bir MCP sunucusuyla uçtan uca güvenlik kuralları."""
 import os
 import sys

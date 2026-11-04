@@ -1,5 +1,5 @@
 @echo off
-REM Core: MK-Agentic-System - Powered by FENIX Engine - (c) 2026 Mustafa Koc - All rights reserved
+REM Core: MK-Agentic-System - Powered by FENIX Engine - (c) 2026 Mustafa Koc - GPL-3.0-only (LICENSE, NOTICE.md)
 REM FENIX - Kurulum / Setup / Installation / Ustanovka / Instalacion
 REM Cok dilli kurulum PowerShell ile calisir / multilingual setup runs in PowerShell.
 cd /d "%~dp0"

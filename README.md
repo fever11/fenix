@@ -87,14 +87,17 @@ Adding a language (for your own copy): copy `locales/en.json`, translate the val
 
 ## License / Lisans
 
-© 2026 Mustafa Koç — **All rights reserved / Tüm hakları saklıdır.** Core: MK-Agentic-System · Powered by FENIX Engine
+© 2026 Mustafa Koç · Core: MK-Agentic-System · Powered by FENIX Engine
 
-Personal, non-commercial use is free. Redistribution, commercial use, or presenting FENIX (or parts of it) as your own
-work — including coursework, academic projects and competitions — requires the author's written permission.
-See [LICENSE](LICENSE) and [AUTHORS.md](AUTHORS.md).
+FENIX is free software under the **GNU GPL v3** (GPL-3.0-only) with a few additional terms (GPL section 7):
+use it, study it, change it and share it — but share your changes under the same license, keep the credit
+(*"Based on FENIX by Mustafa Koç"*), don't present FENIX as your own work, and give modified versions a different name.
+No warranty. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
 Google, Gemini, Groq, NVIDIA and Windows are trademarks of their owners; FENIX is not affiliated with them.
 
-Kişisel ve ticari olmayan kullanım serbesttir. Yeniden dağıtmak, ticari kullanmak ya da FENIX'i (veya bir parçasını)
-ödev, akademik proje ve yarışmalar dahil kendi eseri gibi sunmak yazarın yazılı iznine bağlıdır.
+FENIX, **GNU GPL v3** (GPL-3.0-only) lisansı ve birkaç ek şartla (GPL 7. bölüm) özgür bir yazılımdır: kullan, incele,
+değiştir, paylaş; ama değişikliklerini aynı lisansla paylaş, emeğin sahibini belirt (*"Mustafa Koç'un FENIX projesine
+dayanır"*), FENIX'i kendi eserin gibi sunma ve değiştirdiğin sürüme başka bir ad ver. Garanti yoktur. Bkz.
+[LICENSE](LICENSE) ve [NOTICE.md](NOTICE.md).
 
 > The only official source of FENIX is this repository. / FENIX'in tek resmi kaynağı bu depodur.

@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """Yaratıcı bilgisi ve imza / creator info and signature.
 
 FENIX'in yaratıcısı koda gömülüdür (hafızaya değil): "seni kim yaptı" sorusuna bu bilgiyle cevap verir.
@@ -18,7 +18,7 @@ CORE = "MK-Agentic-System"
 ENGINE = "FENIX Engine"
 CREATOR = {"ad": "Mustafa Koç", "imza": "Core: " + CORE}
 MARK = CREATOR["imza"]
-HEADER = f"Core: {CORE} · Powered by {ENGINE} · (c) 2026 {CREATOR['ad']} · All rights reserved"
+HEADER = f"Core: {CORE} · Powered by {ENGINE} · (c) 2026 {CREATOR['ad']} · GPL-3.0-only (LICENSE, NOTICE.md)"
 # yaratıcı bilgisinin parmak izi: değiştirilirse sürüm etiketi bunu gösterir
 _FP = "6a6b77e85a83"
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

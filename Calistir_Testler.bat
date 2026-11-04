@@ -1,5 +1,5 @@
 @echo off
-REM Core: MK-Agentic-System - Powered by FENIX Engine - (c) 2026 Mustafa Koc - All rights reserved
+REM Core: MK-Agentic-System - Powered by FENIX Engine - (c) 2026 Mustafa Koc - GPL-3.0-only (LICENSE, NOTICE.md)
 REM FENIX otomatik testleri: gercek verine dokunmaz, internete cikmaz, API anahtari gerekmez.
 chcp 65001 >nul
 cd /d "%~dp0"

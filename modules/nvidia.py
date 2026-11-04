@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """NVIDIA (build.nvidia.com) sağlayıcısı — v6.0. İsteğe bağlı; config.yaml'da api_keys.nvidia doluysa kullanılır.
 
 Kullanım yeri:

@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """Yol hafızası / workflow memory.
 
 FENIX çok adımlı bir işi başarıyla bitirdiğinde izlediği yolu ŞABLON olarak saklar:

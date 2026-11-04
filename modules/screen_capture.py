@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """Gözler: Olay bazlı tek kare ekran yakalama. Sürekli bellekte tutulmaz,
 yakalanır, base64'e çevrilir, çağıran taraf işi bitince referansı bırakır."""
 import io

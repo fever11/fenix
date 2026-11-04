@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """FENIX otomatik testleri — ortak ayarlar.
 
 Testler GERÇEK verine dokunmaz: her test geçici bir klasörde çalışır (data/ orada oluşur), internete çıkmaz,

@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """Hafıza ve sohbet takibi: eski sohbet bulunur, gizli sohbet yazılmaz, uzun sohbette ilk soru kaybolmaz."""
 from modules.memory import Memory
 

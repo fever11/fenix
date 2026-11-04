@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """
 FENIX - Masaüstü arayüz / desktop UI (CustomTkinter)
 =============================================
@@ -2964,6 +2964,10 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         pr = audio_io.get_prosody()
         lines += ["", f"SES AYARI  hız {pr['rate']} • ton {pr['pitch']} • yükseklik {pr['volume']}",
                   "  'daha yavaş konuş', 'sesini incelt', 'ses ayarını sıfırla' diyerek değiştirebilirsin."]
+        lines += ["", "LİSANS",
+                  "  • FENIX © 2026 Mustafa Koç · GNU GPL v3 (GPL-3.0-only) ve ek şartlar (LICENSE, NOTICE.md)",
+                  "  • Kullanabilir, değiştirebilir, paylaşabilirsin: aynı lisansla, atfı koruyarak, başka bir adla.",
+                  "  • HİÇBİR GARANTİ YOKTUR. Resmi kaynak: github.com/fever11/fenix"]
         return "\n".join(lines)
 
     def _settings_text(self):

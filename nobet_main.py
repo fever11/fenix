@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """FENIX Nöbet modu başlatıcısı (v5.10.0). Arayüzü yüklemeden yalnızca hafif izleme işlemini çalıştırır.
 
   python nobet_main.py                        nöbet (tepsi simgesi + izleme)

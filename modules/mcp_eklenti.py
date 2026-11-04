@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """Eklentiler (MCP) / plugins via the Model Context Protocol.
 
 MCP, yapay zekâ asistanlarının dış araçlara bağlanması için ortak bir standarttır (asistanlar için "USB" gibi).

@@ -1,4 +1,4 @@
-# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · All rights reserved
+# Core: MK-Agentic-System · Powered by FENIX Engine · (c) 2026 Mustafa Koç · GPL-3.0-only (LICENSE, NOTICE.md)
 """Mod önerisi (v1.2.1, Mustafa'nın fikri).
 
 İş, seçili moda göre fazla büyükse FENIX cevabın sonunda daha uygun modu önerir ve nedenini söyler:
