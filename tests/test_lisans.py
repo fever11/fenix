@@ -18,7 +18,8 @@ def _oku(rel):
 
 def test_lisans_gpl3_resmi_metni():
     with open(os.path.join(KOK, "LICENSE"), "rb") as f:
-        assert hashlib.md5(f.read()).hexdigest() == "1ebbd3e34237af26da5dc08a4e440464"   # GNU'nun gpl-3.0.txt'si
+        metin = f.read().replace(b"\r\n", b"\n")        # Windows'ta git satır sonlarını CRLF yapabilir
+    assert hashlib.md5(metin).hexdigest() == "1ebbd3e34237af26da5dc08a4e440464"   # GNU'nun gpl-3.0.txt'si
 
 
 def test_ek_sartlar_ve_atif():
