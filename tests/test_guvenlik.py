@@ -114,3 +114,14 @@ def test_guvenli_modda_model_komut_calistirmaya_kalkarsa_reddedilir(monkeypatch,
     sonuc = llm.last_calls[-1]
     assert sonuc[0] == "run_command" and sonuc[2]["status"] == "error"
     assert out == "Bu modda yapamam."
+
+
+def test_codeql_duzeltmeleri_kalici():
+    """GitHub CodeQL uyarıları (05.11): TLS en az 1.2, imza yorumu regex'siz gizlenir, emoji kalıbı açık yazılır."""
+    import inspect
+    from modules import security, web_analyzer, audit_rules
+    from modules.report_export import _gizli_yorum
+    for fn in (security._cert_info, web_analyzer._tls_info):
+        assert "TLSv1_2" in inspect.getsource(fn)
+    assert _gizli_yorum("<!-- Core: MK-Agentic-System -->") and not _gizli_yorum("<!-- a --> metin <!-- b -->")
+    assert audit_rules._EMOJI_RE.sub("", "Merhaba 😀 ☀️ dünya") == "Merhaba   dünya"

@@ -239,6 +239,7 @@ def _cert_info(host, port=443):
     """TLS sertifika özeti (süresi, veren). Sadece el sıkışma; veri alınmaz."""
     try:
         ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2      # eski, güvensiz TLS 1.0/1.1 kullanılmaz (CodeQL #1/#2)
         with socket.create_connection((host, port), timeout=6) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as s:
                 c = s.getpeercert()

@@ -725,6 +725,12 @@ def _md_table(tb, rows):
     tb.insert("end", "\n")
 
 
+def _gizli_yorum(satir):
+    """Satırın tamamı tek bir <!-- ... --> yorumu mu (imza satırı)? Regex yerine düz kontrol (CodeQL #4/#5)."""
+    st = (satir or "").strip()
+    return st.startswith("<!--") and st.endswith("-->") and "-->" not in st[4:-3]
+
+
 def render_markdown(textbox, md):
     """CTkTextbox içine raporu biçimli yazar: başlıklar, kalın, tablo, maddeler, atıflar, kaynaklar."""
     tb = textbox._textbox
@@ -732,7 +738,7 @@ def render_markdown(textbox, md):
     textbox.configure(state="normal")
     tb.delete("1.0", "end")
     lines = md.splitlines()
-    lines = [x for x in lines if not re.fullmatch(r"\s*<!--.*?-->\s*", x)]   # gizli yorumlar (imza) gösterilmez
+    lines = [x for x in lines if not _gizli_yorum(x)]   # gizli yorumlar (imza) gösterilmez
     i, in_sources = 0, False
     while i < len(lines):
         line = lines[i]

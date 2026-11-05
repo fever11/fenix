@@ -201,6 +201,7 @@ def _tls_info(host, port=443, timeout=10):
     sertifikayı okur; parola/anahtar denemez."""
     try:
         ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2      # eski, güvensiz TLS 1.0/1.1 kullanılmaz (CodeQL #1/#2)
         with socket.create_connection((host, port), timeout=timeout) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()

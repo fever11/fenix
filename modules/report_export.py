@@ -36,11 +36,17 @@ def _table_rows(block):
     return [r + [""] * (ncol - len(r)) for r in cells]
 
 
+def _gizli_yorum(satir):
+    """Satırın tamamı tek bir <!-- ... --> yorumu mu (imza satırı)? Regex yerine düz kontrol (CodeQL #4/#5)."""
+    st = (satir or "").strip()
+    return st.startswith("<!--") and st.endswith("-->") and "-->" not in st[4:-3]
+
+
 def _lines_struct(md):
     """Markdown'ı (tür, içerik) listesine çevirir. Tür: h1/h2/h3, bullet, numbered, table, muted, src,
     hr, p, blank. app.py'deki render_markdown ile aynı ayrıştırma kurallarını izler."""
     lines = (md or "").splitlines()
-    lines = [x for x in lines if not re.fullmatch(r"\s*<!--.*?-->\s*", x)]   # gizli yorumlar (imza) gösterilmez
+    lines = [x for x in lines if not _gizli_yorum(x)]   # gizli yorumlar (imza) gösterilmez
     out, i, in_sources = [], 0, False
     while i < len(lines):
         line = lines[i]

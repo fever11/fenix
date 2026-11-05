@@ -20,7 +20,7 @@ from urllib.parse import urlparse, urlunparse
 # ======================================================================
 # Ortak
 # ======================================================================
-_EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F000-\U0001F2FF️‍]")
+_EMOJI_RE = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]")   # emoji blokları + VS16 + ZWJ (CodeQL #3)
 _SIGNATURE_RE = re.compile(r"^\s*[*_]*\s*(hazırlayan|hazirlayan|prepared by|rapor(u)? hazırlayan)\b.*$",
                            re.IGNORECASE | re.MULTILINE)
 
