@@ -26,7 +26,7 @@ import customtkinter as ctk
 from modules.audio_io import PushToTalkRecorder, speak, stop_speaking, is_speaking, list_input_devices, MicError
 from modules import stt
 from modules.memory import Memory
-from modules.llm_client import LLMClient
+from modules.llm_client import LLMClient, GorevIptal
 from modules.killswitch import KillSwitch
 from modules.agent import Agent
 from modules import functions as fx
@@ -1290,6 +1290,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                              gemini_backup_keys=[_bk] if isinstance(_bk, str) else list(_bk),
                              groq_fallbacks=cfg.get("groq_fallbacks"))
         self._cancel_event = threading.Event()
+        self.llm.iptal = self._cancel_event.is_set      # 'Görevi durdur' model beklemesini de anında keser
         self.session_id = None          # açık sohbet (ilk mesajda oluşturulur)
         self.agent = Agent(self.llm, self.memory,
                            on_stage=lambda name: self.ui_queue.put(("stage", name)),
@@ -1919,6 +1920,10 @@ class FenixApp(ctk.CTk, *_DND_BASES):
 
     def _set_stop_enabled(self, on):
         self.pipe_stop.configure(state="normal" if on else "disabled", fg_color="#7f1d1d" if on else PANEL)
+        try:
+            self.after(50, self._refresh_voice_btn)      # üstteki Durdur da görev boyunca etkin olsun
+        except Exception:
+            pass
 
     def _on_plan(self, steps):
         self._set_stop_enabled(True)
@@ -1955,7 +1960,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self._pipe_render()
 
     def _cancel_task(self):
-        """Uzun görevi (derin araştırma) bir sonraki adım sınırında durdurur."""
+        """Görevi durdurur: derin araştırma bir sonraki adımda, model beklemeleri yarım saniye içinde kesilir."""
         self._cancel_event.set()
         self.pipe_stage.configure(text="Durduruluyor...", text_color=AMBER)
         self._set_stop_enabled(False)
@@ -2345,10 +2350,11 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                 voice = self.cfg["audio"].get("tts_voice", "tr-TR-AhmetNeural")
                 threading.Thread(target=lambda: audio_io.speak(ev["kisa"], voice), daemon=True).start()
         elif kind == "answer":
-            sid, text = data
+            sid, text = data[0], data[1]
+            sure = data[2] if len(data) > 2 else None
             self._notify_answer(text)
             if sid is None or sid == self.session_id:
-                self._append_chat("fenix", text)
+                self._append_chat("fenix", text, sure=sure)
             else:
                 sess = self.memory.get_session(sid)
                 self._append_chat("sys", f"“{sess['title'] if sess else 'Önceki sohbet'}” sohbetindeki cevap hazır "
@@ -2377,10 +2383,12 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                 win.refresh()
 
     # ---------------- CHAT ----------------
-    def _append_chat(self, who, text):
+    def _append_chat(self, who, text, sure=None):
         self.chat.configure(state="normal")
         if who in ("user", "fenix"):
             label = "> " + (i18n.tr("Sen").upper() if who == "user" else "FENIX")
+            if who == "fenix" and sure is not None:      # cevap süresi (07.11 isteği): hız ölçümü için
+                label += f"  ·  {sure:.1f} sn" if sure < 60 else f"  ·  {int(sure // 60)} dk {int(sure % 60)} sn"
             self.chat.insert("end", f"\n{label}\n", who + "_lbl")
         else:
             self.chat.insert("end", "\n• ", who)
@@ -2633,10 +2641,14 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         def worker():
             ok = True
             speak_text = None
+            t0 = time.time()
             try:
                 if user_text:
                     self._remember("user", user_text, session_id)   # ağ çağrısı içerir: worker'da
                 answer = fn()
+            except GorevIptal:
+                ok = False
+                answer = "Görevi durdurdum."
             except Exception as e:
                 ok = False
                 self._record_error("görev", f"{type(e).__name__}: {e}")
@@ -2650,7 +2662,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             if ok:
                 self._remember("assistant", answer, session_id)
             # cevap, görev başladığında açık olan sohbete aittir (bu arada başka sohbete geçilmiş olabilir)
-            self.ui_queue.put(("answer", (session_id, answer)))
+            self.ui_queue.put(("answer", (session_id, answer, time.time() - t0)))
             if ok and session_id is not None:
                 self._auto_title(session_id)
             self.ui_queue.put(("finish", ok))
@@ -2716,8 +2728,17 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             text = text.replace(a, b)
         speak(text, self.cfg["audio"].get("tts_voice", "tr-TR-AhmetNeural"))
 
+    def _gorev_suruyor(self):
+        try:
+            return bool(self._pipe.get("active")) and not self._cancel_event.is_set()
+        except Exception:
+            return False
+
     def _stop_speech(self):
+        """Üstteki 'Durdur': konuşmayı keser; bir görev sürüyorsa onu da durdurur (07.11: iki düğme karışıyordu)."""
         stop_speaking()
+        if self._gorev_suruyor():
+            self._cancel_task()
         self._refresh_voice_btn()
 
     def _toggle_tts_button(self):
@@ -2735,7 +2756,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self.voice_btn.configure(text="🔊 Okuma: AÇIK" if self.tts_enabled else "🔇 Okuma: KAPALI",
                                  fg_color=self._accent() if self.tts_enabled else PANEL2,
                                  hover_color=self._accent_hover())
-        speaking = is_speaking()
+        speaking = is_speaking() or self._gorev_suruyor()
         self.stop_btn.configure(state="normal" if speaking else "disabled",
                                 fg_color="#7f1d1d" if speaking else PANEL2)
 

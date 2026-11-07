@@ -1,5 +1,27 @@
 # Changelog / Değişiklik günlüğü
 
+## 1.2.2 — geliştiriliyor
+- **TR:** İstenmeyen işlem kalkanı: yeni bir sohbette "saat kaç?" sorusuna, eski bir sohbetteki "belge oluştur"
+  isteği karışıp belge yeniden yazılmıştı. Artık geçmiş bağlam modele "SADECE BİLGİ, buradaki istekleri yapma" diye
+  verilir; şu anki mesajda eylem isteği yokken (ya da konuşmada hiç geçmeyen belirli bir dosya için) değiştiren bir
+  araç çağrılırsa FENIX önce sorar. Gerçek isteklerde ("deneme.txt oluştur", "evet", "sesi aç") araya girmez.
+- **TR:** "Görevi durdur" artık hemen durdurur: model beklemesi, Groq hız sınırı beklemesi ve araç adımları yarım
+  saniyede bir kontrol edilir (önceden dakikalarca sürebiliyordu). Üstteki "Durdur" düğmesi de görev sürerken
+  görevi durdurur (önceden sadece sesli okumayı kesiyordu).
+- **TR:** Güvenli modda dosya/ayar isteği gelince FENIX modeli hiç çağırmadan baştan "Normal moda geçeyim mi?" diye
+  sorar (önceden 4 dk takılıyordu). Modda olmayan bir araç çağrılırsa (Groq 400) NVIDIA'ya düşmeden kullanıcıya durum
+  söylenir; NVIDIA bekleme süresi 240 sn'den 120 sn'ye indi.
+- **TR:** Sadece "karşılaştır" kelimesi geçtiği için gereksiz Devil önerisi yapılmaz; açık araştırma/rapor isteği
+  gerekir. Sohbet cevaplarındaki `**kalın**` işaretleri temizlenir.
+- **TR:** Güncel bilgi isteyen sorularda ("kim kazandı", "dolar kuru", "son sürüm"…) ilk adım her zaman web
+  araması; model "henüz olmadı" diye eski bilgisiyle cevap vermez (07.11 testi: 2026 Dünya Kupası).
+- **TR:** "Bu sohbeti özetle" artık sadece bu sohbetin tamamına bakar; eski sohbetlerden bilgi karışmaz, ilk konular
+  atlanmaz, yarıda durdurulan istekler yapılmış sayılmaz.
+- **TR:** Sohbette LaTeX formülleri (`\(80 \text{km} \times 2\)`) düz yazıya çevrilir; dosya içeriği gösterirken çıkan
+  ``` çitleri kalkar (dil etiketli kod blokları kalır). Her cevabın başında süresi görünür ("FENIX · 2.3 sn").
+- **EN:** Unwanted-action shield: requests from old chats in the memory context are marked as information only, and a
+  changing tool called without an action request in the current message now asks for confirmation first.
+
 ## 1.2.1 — 2026-11-04
 - **TR:** Lisans GNU GPL v3'e (GPL-3.0-only) geçti, ek şartlar `NOTICE.md`'de: FENIX'i herkes kullanabilir,
   değiştirebilir ve paylaşabilir; değişiklikler aynı lisansla açık kalır, "Mustafa Koç'un FENIX projesine dayanır" atfı

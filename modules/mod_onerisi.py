@@ -26,6 +26,12 @@ EYLEM_RE = re.compile(r"oluştur|yaz\b|yazar mısın|kaydet|sil\b|silebilir|düz
                       r"yükle|ayarla|sesi|parlaklı|taşı|yeniden adlandır|gönder", re.IGNORECASE)
 YAPAMAM_RE = re.compile(r"bu modda|güvenli mod|yapamam|yapamıyorum|izin(im)? yok|yetkim yok|sadece okuma",
                         re.IGNORECASE)
+ARASTIRMA_RE = re.compile(r"araştır(?!ma\b)|rapor(la| çıkar| hazırla| yaz)|kaynak(lı|ları)|derinlemesine|"
+                          r"internette|web'?de|güncel (fiyat|veri|durum|haber)|piyasa(sını)? (araştır|incele)",
+                          re.IGNORECASE)
+SISTEM_NESNE_RE = re.compile(r"dosya|klasör|klasor|masaüst|masaust|belge|\.(txt|docx?|pdf|py|js|html|cs|java|md)\b|"
+                             r"uygulama|program|\bses(i|ini)?\b|parlaklı|wi-?fi|bluetooth|pencere|bilgisayar(ı)? "
+                             r"(kapat|yeniden)|hatırlat|kısayol|başlangıç", re.IGNORECASE)
 SINIR_RE = re.compile(r"Adım sınırına ulaşıldı|çok adım sürdü", re.IGNORECASE)
 PARCA_RE = re.compile(r"(?m)^\s*(\d{1,2}[.)]|[-•*])\s+\S")
 
@@ -45,11 +51,13 @@ def oner(user_text, mode_key, cevap, calls=(), arastirma_mi=None, reddedilen=Non
     if SINIR_RE.search(c):
         adaylar.append(("devil", "iş bu modun adım sınırına sığmadı; Devil modda iki kat adım hakkım var"))
     if arastirma_mi is None:
+        # 07.11 testi: "C# için aynı karşılaştırmayı yap" isteğine Devil önerildi. Sadece 'karşılaştır' kelimesi
+        # yetmez; açık bir web araştırması/rapor isteği gerekir.
         try:
-            from .agent import looks_like_research_command, kendi_belgesi_istegi
-            arastirma_mi = looks_like_research_command(t) and not kendi_belgesi_istegi(t)
+            from .agent import kendi_belgesi_istegi
+            arastirma_mi = bool(ARASTIRMA_RE.search(t)) and not kendi_belgesi_istegi(t)
         except Exception:
-            arastirma_mi = False
+            arastirma_mi = bool(ARASTIRMA_RE.search(t))
     if arastirma_mi:
         adaylar.append(("devil", "Devil modda derin araştırma yapıyorum: plan çıkarıp çok sayıda kaynağı okur, "
                                  "kaynaklı bir rapor hazırlarım; burada sadece kısa bir cevap verebildim"))
@@ -67,6 +75,12 @@ def buyuk_is_mi(text):
 def on_oneri(user_text, mode_key, reddedilen=None):
     """İşe BAŞLAMADAN sorulacak öneri: açıkça büyük işlerde (uzun, çok parçalı istek) önce sorulur; zayıf bir
     deneme için dakikalarca beklemek ve kota harcamak gerekmez. -> {"mod", "sebep"} ya da None."""
+    if mode_key == "safe" and EYLEM_RE.search(user_text or "") and SISTEM_NESNE_RE.search(user_text or ""):
+        # 07.11 testi: Güvenli modda "masaüstüme deneme.txt oluştur" 200 sn takıldı. Baştan sorulur, model hiç
+        # çağrılmaz.
+        if time.time() - (reddedilen or {}).get("normal", 0) > RED_SURESI_SN:
+            return {"mod": "normal", "sebep": "bu iş bilgisayarında değişiklik gerektiriyor; Güvenli mod sadece okur, "
+                                              "Normal modda yaparım ve riskli adımlarda yine onay sorarım"}
     if mode_key not in ("safe", "normal") or not buyuk_is_mi(user_text):
         return None
     if time.time() - (reddedilen or {}).get("devil", 0) <= RED_SURESI_SN:

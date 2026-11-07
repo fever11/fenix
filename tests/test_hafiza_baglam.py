@@ -192,3 +192,158 @@ def test_ajan_her_yoldan_gelen_cevabi_ortak_kayda_yazar(monkeypatch, ayar):
     assert llm._ortak[-1]["assistant"] == "DERIN_RAPOR_OZETI" and llm._ortak[-1]["kaynak"] is None
     llm._groq_agent_chat("normal", ayar["modes"]["normal"], "bunu Word yap")
     assert "DERIN_RAPOR_OZETI" in " ".join(str(x.get("content")) for x in giden[-1]["messages"])
+
+
+def test_eski_sohbetteki_istek_yeni_soruda_tekrarlanmaz(monkeypatch, ayar):
+    """07.11: yeni sohbette 'saat kaç?' sorusuna, geçmiş bağlamdaki 'belge oluştur' isteği karıştı ve FENIX belgeyi
+    yeniden yazdı. Kalkan: şu anki mesajda eylem yokken değiştiren araç önce onay ister; 'hayır' derse yapılmaz."""
+    from modules import functions as fx
+    llm, giden = _llm_ve_kayit(monkeypatch)
+    sorulan, yazilan = [], []
+    monkeypatch.setattr(fx, "_confirm", lambda *a, **k: sorulan.append(a) or False)
+    monkeypatch.setitem(fx.WHITELISTED_FUNCTIONS, "write_file", lambda **a: yazilan.append(a) or {"status": "ok"})
+    adim = {"n": 0}
+
+    def sahte(payload, **k):
+        giden.append(payload)
+        adim["n"] += 1
+        if adim["n"] == 1:
+            return {"choices": [{"message": {"content": "", "tool_calls": [{"id": "w", "type": "function",
+                    "function": {"name": "write_file",
+                                 "arguments": "{\"path\": \"FENIX_Kapsamli_Tanitim.docx\", \"content\": \"# x\"}"}}]}}]}
+        return {"choices": [{"message": {"content": "Bugün Cumartesi, saat 15:45."}}]}
+    monkeypatch.setattr(llm, "_groq_post", sahte)
+    llm._simdiki_istek = "Merhaba, bugün hangi gün ve saat kaç?"
+    cevap = llm._groq_agent_chat("normal", dict(ayar["modes"]["normal"], allow_actions=True), llm._simdiki_istek,
+                                 memory_context="user: Masaüstüne FENIX_Kapsamli_Tanitim.docx oluştur")
+    assert sorulan and not yazilan and "15:45" in cevap
+    ilk = giden[0]["messages"][-1]["content"]
+    assert "SADECE BİLGİ" in ilk and "yalnızca bunu yap" in ilk
+
+
+def test_kalkan_gercek_isteklerde_araya_girmez(ayar):
+    from modules.llm_client import LLMClient
+    llm = LLMClient("", "gsk_TEST_ANAHTARI_GERCEK_DEGIL", lazy_gemini=True)
+    durumlar = [
+        ("Masaüstüme deneme.txt oluştur, içine merhaba yaz", "write_file", {"path": "deneme.txt"}, False),
+        ("bana bir not dosyası oluştur", "write_file", {"path": "notlar_2026.txt"}, False),
+        ("evet", "write_file", {"path": "FENIX_Kapsamli_Tanitim.docx"}, False),
+        ("sesi biraz aç", "adjust_volume", {"level": 50}, False),
+        ("saat kaç?", "write_file", {"path": "FENIX_Kapsamli_Tanitim.docx"}, True),
+        ("sesi biraz aç", "write_file", {"path": "FENIX_Kapsamli_Tanitim.docx"}, True),
+        ("saat kaç?", "list_folder", {"folder": "."}, False),           # salt okunur araç hiç sorulmaz
+    ]
+    for istek, ad, arg, beklenen in durumlar:
+        llm._simdiki_istek = istek
+        assert llm._istenmeyen_mi(ad, arg) is beklenen, (istek, ad)
+
+
+def _yanit(kod, govde="{}", basliklar=None):
+    import requests
+    r = requests.Response()
+    r.status_code = kod
+    r._content = govde.encode()
+    r.headers.update(basliklar or {})
+    return r
+
+
+def test_durdur_hiz_siniri_beklemesini_hemen_keser(monkeypatch):
+    """07.11: 'Görevi durdur' Groq'un 30 sn beklemesinde ya da uzun ağ isteğinde işe yaramıyordu."""
+    import time, threading, pytest, requests
+    from modules.llm_client import LLMClient, GorevIptal
+    llm = LLMClient("", "gsk_TEST_ANAHTARI_GERCEK_DEGIL", lazy_gemini=True)
+    olay = threading.Event()
+    llm.iptal = olay.is_set
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _yanit(429, "rate limit", {"retry-after": "30"}))
+    threading.Timer(0.4, olay.set).start()
+    t0 = time.time()
+    with pytest.raises(GorevIptal):
+        llm._groq_post({"model": "x", "messages": []})
+    assert time.time() - t0 < 2.5
+
+    olay.clear()
+    monkeypatch.setattr(requests, "post", lambda *a, **k: time.sleep(10) or _yanit(200, '{"choices": []}'))
+    threading.Timer(0.4, olay.set).start()
+    t0 = time.time()
+    with pytest.raises(GorevIptal):
+        llm._groq_post({"model": "x", "messages": []})
+    assert time.time() - t0 < 2.5
+
+
+def test_modda_olmayan_arac_cagrisi_nvidiaya_dusmez(monkeypatch, ayar):
+    """07.11: Güvenli modda write_file çağrıldı, Groq 400 verdi, FENIX NVIDIA'da 4 dk bekledi."""
+    import requests
+    llm, giden = _llm_ve_kayit(monkeypatch)
+    hata = _yanit(400, '{"error":{"code":"tool_use_failed","message":"attempted to call tool write_file which was not '
+                       'in request.tools"}}')
+
+    def sahte(payload, **k):
+        giden.append(payload)
+        if len(giden) == 1:
+            raise requests.HTTPError(response=hata)
+        assert "tools" not in payload
+        return {"choices": [{"message": {"content": "Güvenli modda dosya oluşturamıyorum; Normal moda geçebiliriz."}}]}
+    monkeypatch.setattr(llm, "_groq_post", sahte)
+    cevap = llm._groq_agent_chat("safe", ayar["modes"]["safe"], "Masaüstüme deneme.txt oluştur")
+    assert "Güvenli modda" in cevap and len(giden) == 2
+
+
+def test_kalin_isaretleri_sohbet_cevabindan_kalkar():
+    from modules.llm_client import bozuk_cevap_temizle
+    assert bozuk_cevap_temizle("Bugün **Cumartesi**, saat **15:49**.") == "Bugün Cumartesi, saat 15:49."
+
+
+def test_guncel_soruda_ilk_adim_web_aramasi(monkeypatch, ayar):
+    """07.11 testi: '2026 Dünya Kupası'nı kim kazandı?' sorusuna aramadan 'henüz oynanmadı' dedi."""
+    from modules import functions as fx
+    llm, giden = _llm_ve_kayit(monkeypatch)
+    monkeypatch.setitem(fx.WHITELISTED_FUNCTIONS, "search_web", lambda **a: {"status": "ok", "results": []})
+
+    def sahte(payload, **k):
+        giden.append(payload)
+        if len(giden) == 1:
+            return {"choices": [{"message": {"content": "", "tool_calls": [{"id": "s", "type": "function",
+                    "function": {"name": "search_web", "arguments": "{\"query\": \"2026 Dünya Kupası kazanan\"}"}}]}}]}
+        return {"choices": [{"message": {"content": "Aradım."}}]}
+    monkeypatch.setattr(llm, "_groq_post", sahte)
+    for soru, zorunlu in (("2026 Dünya Kupası'nı kim kazandı?", True), ("Python ile Java farkı ne?", False),
+                          ("bugün hangi gün ve saat kaç?", False), ("dolar kuru kaç tl?", True)):
+        giden.clear()
+        llm._simdiki_istek = soru
+        llm._groq_agent_chat("normal", ayar["modes"]["normal"], soru)
+        tc = giden[0].get("tool_choice")
+        assert (isinstance(tc, dict) and tc["function"]["name"] == "search_web") is zorunlu, soru
+        if zorunlu:
+            assert giden[1].get("tool_choice") == "auto"          # sadece ilk adım zorunlu
+
+
+def test_sohbet_cevabinda_latex_ve_kod_citi_ham_gorunmez():
+    """07.11 ikinci test: tren sorusunda '\\(80 \\text{ km/saat}...\\)', dosya okumada ``` ham görünüyordu."""
+    from modules.llm_client import bozuk_cevap_temizle as b
+    assert b(r"\(80 \text{ km/saat} \times 2,75 \text{ saat} = 220 \text{ km}\)") == "80 km/saat × 2,75 saat = 220 km"
+    assert b("İçeriği:\n```\nmerhaba\n```") == "İçeriği:\nmerhaba"
+    assert b("```python\nprint(1)\n```").startswith("```python")             # kod bloğu kalır
+    assert b(r"Fiyat $5, yol C:\Users\deneme") == r"Fiyat $5, yol C:\Users\deneme"     # para ve yol bozulmaz
+
+
+def test_sohbet_ozeti_sadece_bu_sohbetten(tmp_path):
+    """07.11 ikinci test: 'Bu sohbeti 3 maddede özetle' eski sohbetteki belgeyi kattı, ilk konuları atladı."""
+    from modules.agent import Agent, SOHBET_OZET_RE
+    from modules.memory import Memory
+    from modules.llm_client import LLMClient
+    m = Memory(db_path="data/ozet.db", semantic=False)
+    eski = m.create_session(title="Eski")
+    m.add_message("user", "Masaüstüne FENIX_Kapsamli_Tanitim.docx oluştur", session_id=eski)
+    m.current_session_id = m.create_session(title="Yeni")
+    for rol, t in (("user", "Bir tren saatte 80 km hızla 2 saat 45 dakika giderse?"), ("assistant", "220 km."),
+                   ("user", "Türkiye'nin başkenti İstanbul mu?"), ("assistant", "Hayır, Ankara."),
+                   ("user", "Bu sohbeti 3 maddede özetle.")):
+        m.add_message(rol, t)
+    ag = Agent(LLMClient("", "gsk_TEST_ANAHTARI_GERCEK_DEGIL", lazy_gemini=True), m, notify=lambda *a: None)
+    d = ag._sohbet_dokumu("Bu sohbeti 3 maddede özetle.")
+    assert "tren" in d and "Ankara" in d and "FENIX_Kapsamli" not in d and "SADECE buna göre" in d
+    assert d.count("Bu sohbeti 3 maddede özetle") == 0
+    for t in ("bu sohbeti özetle", "Bu sohbeti 3 maddede özetle.", "konuştuklarımızı özetle", "bugün neler konuştuk"):
+        assert SOHBET_OZET_RE.search(t), t
+    for t in ("bu makaleyi özetle", "sohbet uygulaması yaz"):
+        assert not SOHBET_OZET_RE.search(t), t

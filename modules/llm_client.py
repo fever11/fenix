@@ -10,6 +10,7 @@
 Bu tasarım, kullanıcının mevcut çalışan Gemini kurulumunu bozmadan üstüne
 Groq hızını ekler; Groq opsiyoneldir.
 """
+import os
 import re
 import time
 import base64
@@ -18,6 +19,11 @@ import json
 import requests
 
 from . import functions as fx
+
+
+class GorevIptal(BaseException):
+    """Kullanıcı 'Görevi durdur'a bastı. BaseException: ara katmanlardaki 'except Exception' yedek-model
+    zincirleri bunu yakalayıp başka modele geçmesin, görev hemen dursun (07.11)."""
 from . import imza
 from . import i18n
 
@@ -50,10 +56,32 @@ BOZUK_CEVAP = ("Model bu sefer bozuk bir cevap üretti (anlamsız nokta ve yıld
                "Bir daha sorar mısın? Uzun bir belge istiyorsan dosya adını .docx ya da .pdf olarak söylemen yeterli.")
 
 
+_KALIN_RE = re.compile(r"\*\*([^*\n]+?)\*\*")
+_LATEX_YERINE = [(re.compile(r"\\text\{([^}]*)\}"), r"\1"), (re.compile(r"\\times"), "×"),
+                 (re.compile(r"\\cdot"), "·"), (re.compile(r"\\div"), "÷"), (re.compile(r"\\approx"), "≈"),
+                 (re.compile(r"\\le(q)?\b"), "≤"), (re.compile(r"\\ge(q)?\b"), "≥"), (re.compile(r"\\neq"), "≠"),
+                 (re.compile(r"\\frac\{([^}]*)\}\{([^}]*)\}"), r"(\1)/(\2)"),
+                 (re.compile(r"\\sqrt\{([^}]*)\}"), r"√(\1)"), (re.compile(r"\\[()\[\]]"), "")]
+
+
+def _duz_matematik(t):
+    """07.11 testi: sohbette '\\(80 \\text{ km/saat} \\times 2,75\\)' gibi LaTeX ham görünüyordu. Sohbet penceresi
+    LaTeX çizemez: düz yazıya çevrilir. Kod bloğu çitleri (```) de sohbette ham görünmesin diye kaldırılır."""
+    if "\\" in t:
+        for desen, yeni in _LATEX_YERINE:
+            t = desen.sub(yeni, t)
+        t = re.sub(r"(?<=\S) {2,}(?=\S)", " ", t)
+    # Dil etiketi olmayan çit (``` ... ```) düz metin (dosya içeriği) içindir: çitler kalkar. ```python gibi kod
+    # blokları olduğu gibi kalır (kullanıcı kodu kopyalayabilsin).
+    t = re.sub(r"(?ms)^[ \t]*```[ \t]*\n(.*?)\n[ \t]*```[ \t]*$", r"\1", t)
+    return t
+
+
 def bozuk_cevap_temizle(text):
     """Model bazen sayfalarca '…', '**', '...' üretip çöküyor (04.11, PDF isteği). Harf oranı çok düşük uzun
     cevaplar ekrana basılmaz; yerine kısa bir açıklama döner."""
-    t = text or ""
+    t = _KALIN_RE.sub(r"\1", text or "")     # sohbet cevabı sesli okunur, düz görünür: **kalın** işareti kalkar
+    t = _duz_matematik(t)
     if len(t) < 300:
         return t
     harf = sum(ch.isalpha() for ch in t)
@@ -115,7 +143,9 @@ def build_system_instruction(mode_key, mode_cfg):
         "(önceki sohbetler/günler ve kullanıcının notları) ilgili kayıtlar verilir; bu senin kalıcı hafızandır. "
         "'oturumlar arası hafızam yok' gibi yanlış bir şey söyleme. '[Eski sohbet: ...]' ve '[Eski mesaj ...]' satırları "
         "önceki sohbetlerden (JARVIS'ten aktarılanlar dahil) bulunan kayıtlardır; geçmiş bir konu sorulursa 'kayıt yok' "
-        "demeden önce bunlara bak ve oradaki bilgiyle cevap ver. Orada sadece kullanıcının mesajları varsa bunu belirt.\n\n"
+        "demeden önce bunlara bak ve oradaki bilgiyle cevap ver. Orada sadece kullanıcının mesajları varsa bunu belirt. "
+        "ÖNEMLİ: Geçmiş bağlamdaki istekler (dosya oluştur, sil, aç vb.) ESKİDİR ve zaten yapılmıştır; onları ASLA "
+        "kendiliğinden yeniden yapma. Araç çağırmayı yalnızca kullanıcının ŞU ANKİ mesajı gerektiriyorsa yap.\n\n"
         "HATALAR: Bir araç hata verirse hata metnini ASLA okuma ya da aktarma. Sadece "
         "'Bir hata ile karşılaştım, ayrıntıyı hata notlarına kaydettim.' de ve gerekirse "
         "ne yapılabileceğini kısaca öner. Ayrıntı sistem tarafından kaydedilir.\n\n"
@@ -163,7 +193,10 @@ def build_system_instruction(mode_key, mode_cfg):
         "yanıltma.\n\n"
         "ZAMAN: Her mesajın başında '[Şu an: ...]' ile güncel tarih ve saat verilir; tarih/saat hesaplarını "
         "(hatırlatmalar, 'yarın', 'iki saat sonra') buna göre yap. Bu satır sadece senin içindir: cevabına "
-        "ASLA '[Şu an: ...]' yazma ya da kopyalama. Kullanıcı saati sorarsa doğal bir cümleyle söyle.\n\n"
+        "ASLA '[Şu an: ...]' yazma ya da kopyalama. Kullanıcı saati sorarsa doğal bir cümleyle söyle. "
+        "Bilgilerin eğitim tarihinde kalmıştır; bugünün tarihi ondan SONRADIR. Bir olayın sonucu, kazananı, güncel "
+        "fiyat, kim hangi görevde gibi değişebilen her bilgide kendi bilgine güvenme: önce search_web ile ara. "
+        "Olayın tarihi bugünden önceyse 'henüz olmadı' DEME; arayıp sonucu bul, bulamazsan 'bulamadım' de.\n\n"
         "YETENEKLERİN (zaten var, 'eklenebilir' diye önerme): ekrana bakma ve eklenen/yapıştırılan görselleri "
         "okuma; PDF/Word/Excel/kod dosyalarını okuma; dosya arama/listeleme/okuma/yazma; web arama ve sayfa okuma; "
         "Devil'de derin araştırma ve rapor; uygulama/site/klasör açma, ses seviyesi, PowerShell (riskliler onaylı); "
@@ -318,6 +351,7 @@ class LLMClient:
         self._ortak_no = 0
         self._gorulen = {}        # kaynak -> gördüğü son kayıt numarası
         self._son_kaynak = None   # son cevabı üreten yol (kendi geçmişinde zaten var)
+        self.iptal = lambda: False  # uygulama 'Görevi durdur' olayını bağlar
         self._recent_tools = {}  # mode_key -> son istekte kullanılan araç adları
         self.last_calls = []     # son ask() sırasında çalışan araçlar: [(ad, argümanlar, sonuç)] (komut hafızası öğrenir)
         fx.set_vision_handler(self.describe_image)
@@ -344,6 +378,41 @@ class LLMClient:
     def _gclients(self, value):
         self._gc = list(value)
 
+    # --- Görevi durdur (07.11): beklemeler ve ağ istekleri yarım saniyede bir 'durdur basıldı mı' diye bakar ---
+    def _iptal_kontrol(self):
+        try:
+            if self.iptal():
+                raise GorevIptal()
+        except GorevIptal:
+            raise
+        except Exception:
+            pass
+
+    def _uyu(self, sn):
+        bitis = time.time() + sn
+        while time.time() < bitis:
+            self._iptal_kontrol()
+            time.sleep(min(0.5, max(0.0, bitis - time.time())))
+
+    def _iptalli(self, fn):
+        """fn'i (ağ isteği) arka planda çalıştırır; durdur basılırsa sonucunu beklemeden GorevIptal fırlatır."""
+        import threading
+        kutu = {}
+
+        def calis():
+            try:
+                kutu["r"] = fn()
+            except BaseException as e:          # noqa: BLE001 — hata ana iş parçacığına taşınır
+                kutu["e"] = e
+        t = threading.Thread(target=calis, daemon=True)
+        t.start()
+        while t.is_alive():
+            t.join(0.3)
+            self._iptal_kontrol()
+        if "e" in kutu:
+            raise kutu["e"]
+        return kutu["r"]
+
     # --- GROQ ortak istek (429'da bekleyip yeniden dener) ---
     def _groq_post(self, payload, timeout=90, max_wait=40, endpoint="groq"):
         """OpenAI uyumlu sohbet isteği. endpoint: "groq" (varsayılan) ya da "nvidia" (build.nvidia.com)."""
@@ -351,12 +420,14 @@ class LLMClient:
             from . import nvidia
             url = nvidia.URL
             headers = {"Authorization": f"Bearer {nvidia.CFG['key']}", "Content-Type": "application/json"}
-            timeout = max(timeout, nvidia.CFG.get("timeout", 240))     # NVIDIA ücretsiz katmanı yavaş olabilir
+            # NVIDIA ücretsiz katmanı yavaş olabilir ama 240 sn beklemek kullanıcıyı kilitliyordu (07.11): en fazla 120
+            timeout = min(max(timeout, nvidia.CFG.get("timeout", 120)), 120)
         else:
             url = "https://api.groq.com/openai/v1/chat/completions"
             headers = {"Authorization": f"Bearer {self.groq_api_key}", "Content-Type": "application/json"}
         for attempt in range(4):
-            r = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            self._iptal_kontrol()
+            r = self._iptalli(lambda: requests.post(url, headers=headers, json=payload, timeout=timeout))
             if r.status_code == 429 and attempt < 3:
                 low = (r.text or "")[:600].lower()
                 if "per day" in low or "tpd" in low or "rpd" in low:
@@ -368,7 +439,7 @@ class LLMClient:
                 if wait > max_wait:
                     break
                 print(f"[GROQ] hız sınırı, {wait:.0f} sn bekleniyor...")
-                time.sleep(wait)
+                self._uyu(wait)
                 continue
             r.raise_for_status()
             return r.json()
@@ -624,8 +695,10 @@ class LLMClient:
             out = list(msgs)
             for i in range(len(out) - 1, -1, -1):      # son kullanıcı mesajı = bu turun mesajı
                 if out[i].get("role") == "user":
-                    out[i] = dict(out[i], content=f"[İlgili geçmiş bağlam]\n{memory_context}\n\n"
-                                                  f"[Kullanıcının şu anki mesajı]\n{out[i].get('content') or ''}")
+                    out[i] = dict(out[i], content=f"[İlgili geçmiş bağlam — SADECE BİLGİ; buradaki istekleri yeniden YAPMA]\n"
+                                                  f"{memory_context}\n\n"
+                                                  f"[Kullanıcının şu anki mesajı — yalnızca bunu yap]\n"
+                                                  f"{out[i].get('content') or ''}")
                     break
             return out
         selected = self._select_tools(mode_key, mode_cfg, user_text)
@@ -635,11 +708,21 @@ class LLMClient:
         ep = mode_cfg.get("_endpoint", "groq")
         try:
             tur = getattr(self, "tur_siniri", None) or (12 if mode_key == "devil" else 8 if mode_key == "ogrenme" else 6)
+            engellendi = False
             for tur_no in range(tur):   # araç turu sınırı (Devil: derin araştırma)
+                self._iptal_kontrol()
                 payload = {"model": mode_cfg["groq_model"], "messages": [system] + with_ctx(self._trim_hist(hist)),
                            "temperature": 0.6}
                 kalan = tur - tur_no
-                if used and kalan <= 2:
+                if engellendi:
+                    # 07.11: Güvenli modda yasak araç tekrar tekrar denendi (200 sn). Bir kez engellenince araç
+                    # verilmez; model kullanıcıya durumu söyler.
+                    payload.pop("tools", None)
+                    payload.pop("tool_choice", None)
+                    payload["messages"].append({"role": "system", "content": (
+                        "Bu işlem bu modda yapılamıyor. Tekrar deneme. Kullanıcıya kısaca bunu yapamadığını ve "
+                        "nedenini söyle (Güvenli mod sadece okur; Normal moda geçilirse yapılabilir).")})
+                elif used and kalan <= 2:
                     # 04.11: belge isteğinde 6 turun hepsi aramaya gitti, dosya hiç yazılmadı. Son turlarda model
                     # uyarılır: yeni araştırma yok, eldekiyle işi bitir.
                     payload["messages"].append({"role": "system", "content": (
@@ -649,6 +732,11 @@ class LLMClient:
                 if tools:
                     payload["tools"] = tools
                     payload["tool_choice"] = "auto"
+                    if tur_no == 0 and not engellendi and self._guncel_mi() and any(
+                            t.get("function", {}).get("name") == "search_web" for t in tools):
+                        # 07.11 testi: "2026 Dünya Kupası'nı kim kazandı?" sorusuna aramadan "henüz oynanmadı" dedi.
+                        # Güncel bilgi isteyen sorularda ilk adım mutlaka web araması olur.
+                        payload["tool_choice"] = {"type": "function", "function": {"name": "search_web"}}
                     if used and kalan <= 2:
                         # Uyarı yetmeyebiliyor (04.11, ikinci deneme: yine 6 arama). Son iki turda arama/keşif
                         # araçları hiç verilmez: model ya yazar ya cevap verir.
@@ -663,7 +751,18 @@ class LLMClient:
                 except requests.HTTPError as he:
                     code = getattr(he.response, "status_code", 0)
                     body = getattr(he.response, "text", "")[:300]
-                    if code in (413, 429) or "too large" in body.lower() or "tokens" in body.lower():
+                    if code == 400 and ("tool_use_failed" in body or "not in request.tools" in body):
+                        # 07.11: Güvenli modda verilmeyen write_file çağrıldı; Groq tüm isteği reddetti ve FENIX
+                        # NVIDIA'ya düşüp 4 dk bekledi. Araçsız bir kez daha sorulur: model durumu kullanıcıya söyler.
+                        print("[GROQ] modda olmayan araç çağrıldı, araçsız yeniden soruluyor")
+                        engellendi = True
+                        payload.pop("tools", None)
+                        payload.pop("tool_choice", None)
+                        payload["messages"] = payload["messages"] + [{"role": "system", "content": (
+                            "İstediğin araç bu modda yok. Araç çağırma. Kullanıcıya bu işi bu modda yapamadığını ve "
+                            "nedenini kısaca söyle (Güvenli mod sadece okur; Normal moda geçilirse yapılabilir).")}]
+                        msg = self._groq_post(payload, endpoint=ep)["choices"][0]["message"]
+                    elif code in (413, 429) or "too large" in body.lower() or "tokens" in body.lower():
                         # İstek çok büyük / dakikalık token sınırı: kısa geçmiş ve yalnızca temel araçlarla bir kez daha
                         print(f"[GROQ] istek büyük/sınırda ({code}), küçültülüp yeniden deneniyor")
                         payload["messages"] = [system] + self._trim_hist(hist, max_msgs=6, max_chars=800,
@@ -700,6 +799,7 @@ class LLMClient:
                         self._recent_tools.pop(mode_key, None)
                     return bozuk_cevap_temizle(strip_time_stamp(msg.get("content") or "")) or "Tamamlandı."
                 for call in calls:
+                    self._iptal_kontrol()
                     name = call["function"]["name"]
                     used.add(name)
                     self._recent_tools[mode_key] = set(used)
@@ -710,8 +810,11 @@ class LLMClient:
                     verilen = {t.get("function", {}).get("name") for t in payload.get("tools") or []}
                     if name not in fx.WHITELISTED_FUNCTIONS or name not in self._allowed(mode_cfg):
                         result = {"status": "error", "message": "Bu işlem bu modda yapılamaz."}
+                        engellendi = True
                     elif payload.get("tools") is not None and name not in verilen and kalan <= 2:
                         result = {"status": "error", "message": "Arama hakkın bitti; topladığın bilgiyle işi bitir."}
+                    elif not self._istenmeyen_onay(name, args):
+                        result = {"status": "error", "message": self._ISTENMEDI}
                     else:
                         try:
                             result = fx.WHITELISTED_FUNCTIONS[name](**args)
@@ -743,7 +846,7 @@ class LLMClient:
                     + ("Dosya yazıldı." if yazildi else "Dosya/belge yazılamadı.")
                     + (" Daha uzun işler için Devil modunu dene." if mode_key != "devil" else "")
                     + "\n\n(Adım sınırına ulaşıldı.)")
-        except Exception:
+        except (Exception, GorevIptal):
             # Yarım kalmış tur geçmişi bozmasın: son kullanıcı mesajından itibaren temizle
             while hist and not (hist[-1].get("role") == "user" and hist[-1].get("content") == content):
                 hist.pop()
@@ -848,7 +951,7 @@ class LLMClient:
         for img in ([screenshot_b64] if isinstance(screenshot_b64, str) else (screenshot_b64 or [])):
             parts.append(types.Part.from_bytes(data=base64.b64decode(img), mime_type="image/jpeg"))
 
-        response = chat.send_message(parts)
+        response = self._iptalli(lambda: chat.send_message(parts))
         out = self._handle_gemini_response(chat, response, mode_cfg)
         self._son_kaynak = kaynak
         return out
@@ -862,6 +965,8 @@ class LLMClient:
                 args = dict(fc.args) if fc.args else {}
                 if name not in fx.WHITELISTED_FUNCTIONS or name not in self._allowed(mode_cfg):
                     result = {"status": "error", "message": "Bu işlem bu modda yapılamaz."}
+                elif not self._istenmeyen_onay(name, args):
+                    result = {"status": "error", "message": self._ISTENMEDI}
                 else:
                     try:
                         result = fx.WHITELISTED_FUNCTIONS[name](**args)
@@ -870,9 +975,70 @@ class LLMClient:
                         result = {"status": "error", "message": fx.GENERIC_ERROR}
                 self.last_calls.append((name, args, result))
                 parts.append(types.Part.from_function_response(name=name, response={"result": result}))
-            follow = chat.send_message(parts)
+            follow = self._iptalli(lambda: chat.send_message(parts))
             return self._handle_gemini_response(chat, follow, mode_cfg)
         return response.text
+
+    # ---- İstenmeyen işlem kalkanı (07.11): yeni sohbette "saat kaç?" sorusuna eski bir sohbetteki "belge oluştur"
+    # isteği karıştı ve FENIX belgeyi yeniden yazdı. Değiştiren bir araç, şu anki mesajda bir eylem isteği yokken
+    # (ya da şu anki konuşmada hiç geçmeyen belirli bir dosya için) çağrılırsa önce kullanıcıya sorulur.
+    _ISTENMEDI = ("Kullanıcı bu işlemi şu anki mesajında istemedi ve onaylamadı. Yapma; geçmiş bağlamdaki eski "
+                  "istekleri tekrarlama, sadece kullanıcının şu anki mesajına cevap ver.")
+    _EYLEM_RE = re.compile(
+        r"oluştur|olustur|yaz|kaydet|sil|kaldır|kaldir|aç|\bac\b|kapat|çalıştır|calistir|başlat|baslat|ekle|değiştir|"
+        r"degistir|düzenle|duzenle|güncelle|guncelle|indir|kur\b|kurul|yükle|yukle|ayarla|yükselt|kıs|artır|azalt|taşı|"
+        r"kopyala|gönder|gonder|yolla|hatırlat|hatirlat|kilitle|durdur|bitir|temizle|tara\b|tarama|oynat|devam|"
+        r"\bgeç|\byap|hazırla|hazirla|çevir|dönüştür|kısalt|create|write|save|delete|remove|open|close|run|install|"
+        r"send|make|set\b|turn|evet|olur|tamam|onayla|\bok\b|tabii|lütfen yap", re.IGNORECASE)
+    _DOSYA_RE = re.compile(r"dosya|belge|doküman|dokuman|word|pdf|txt|\.\w{2,4}\b|kaydet|yaz|\bnot\b|notu|rapor|"
+                           r"\bkod|script|html|python|sayfa|klasör|klasor", re.IGNORECASE)
+    _GUNCEL_RE = re.compile(
+        r"kim kazand|kazanan|kazandı mı|şampiyon|skor|maç(ı|ın)? (sonuc|kaç)|sonucu ne|sonuçları|son durum|güncel|"
+        r"şu an(ki|da)? (fiyat|kur|durum|başkan|lider)|bugün(kü)? (haber|maç|fiyat|kur|hava)|haberler|son dakika|"
+        r"fiyatı ne|kaç (tl|lira|dolar|euro)|dolar kuru|euro kuru|borsa|hava durumu|seçim(i|in)? (kim|sonuç)|"
+        r"kim oldu|kimdir|başkanı kim|ceo'?su kim|yeni çıkan|son sürüm(ü)?|en son (sürüm|model|çıkan)|"
+        r"çıktı mı|yayınlandı mı|ne zaman çıkacak|vefat|öldü mü|hayatta mı", re.IGNORECASE)
+
+    def _guncel_mi(self):
+        """Soru güncel/değişebilen bir bilgi mi istiyor? (Ham kullanıcı metnine bakılır, zaman damgasına değil.)"""
+        return bool(self._GUNCEL_RE.search(getattr(self, "_simdiki_istek", "") or ""))
+
+    _ONAY_RE = re.compile(r"\s*(evet|olur|tamam|onayla|ok|okey|tabii|tabi|yap|yapabilirsin|devam)\b", re.IGNORECASE)
+    _HEDEF_ARGLAR = ("path", "file_path", "filename", "folder", "target", "name", "app_name")
+
+    def _konusma_metni(self):
+        """Şu anki mesaj + bu sohbetin son iki konuşması (geçmiş hafıza bağlamı DEĞİL)."""
+        son = [e["user"] + " " + e["assistant"][:1500] for e in self._ortak[-2:]]
+        return " ".join(son + [getattr(self, "_simdiki_istek", "") or ""]).lower()
+
+    def _istenmeyen_mi(self, name, args):
+        if name in fx.READONLY_FUNCTIONS or not getattr(self, "_simdiki_istek", None):
+            return False
+        simdi = self._simdiki_istek
+        if not self._EYLEM_RE.search(simdi):
+            return True                               # soru/sohbet mesajı: değiştiren işlem beklenmez
+        if len(simdi.strip()) <= 25 and self._ONAY_RE.match(simdi):
+            return False                              # "evet / olur / tamam": FENIX'in az önceki sorusuna cevap
+        if name in ("write_file", "edit_file", "delete_file"):
+            metin = self._konusma_metni()
+            for k in self._HEDEF_ARGLAR:
+                v = (args or {}).get(k)
+                if isinstance(v, str) and v.strip():
+                    kok = os.path.splitext(os.path.basename(v.strip().rstrip("\\/")))[0].lower()
+                    if len(kok) >= 6 and kok not in metin and not self._DOSYA_RE.search(simdi):
+                        return True
+        return False
+
+    def _istenmeyen_onay(self, name, args):
+        """True: devam et. İstenmemiş görünen işlemde kullanıcıya sorar."""
+        if not self._istenmeyen_mi(name, args):
+            return True
+        hedef = next((str(args.get(k)) for k in self._HEDEF_ARGLAR if (args or {}).get(k)), "")
+        print(f"[KALKAN] istenmemiş görünen işlem: {name} {hedef}")
+        return fx._confirm("İstemediğin bir işlem olabilir",
+                           f"FENIX şu işlemi yapmak istiyor ama şu anki mesajında böyle bir istek görünmüyor:\n\n"
+                           f"{name} {hedef}\n\nYapılsın mı?",
+                           "Eski bir sohbetteki istek karışmış olabilir. Emin değilsen 'Hayır' de.")
 
     ORTAK_MAX = 40
     ORTAK_CEVAP_MAX = 3000
@@ -946,6 +1112,7 @@ class LLMClient:
         - Aksi halde Groq yapılandırılmışsa -> Groq (hızlı metin)
         - Groq yoksa -> Gemini
         """
+        self._simdiki_istek = user_text
         import datetime as _dt
         self.last_calls = []
         _days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]

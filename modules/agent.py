@@ -144,6 +144,13 @@ def kendi_bilgisi(text):
             "olmayanı uydurma, 'emin değilim' de]\n" + r["message"])
 
 
+SOHBET_OZET_RE = re.compile(
+    r"\b(bu|şu|tüm|bütün)?\s*(sohbet|konuşma|konusma|muhabbet)(imiz|imizi|i|ı|u|yi|yı|leri|ları)?"
+    r"(\s+\S+){0,3}?\s+(özetle|ozetle|özetler|özet(ini)? (çıkar|ver|yaz)|toparla)|"
+    r"(bu sohbette|bugün|şimdiye kadar|az önce)\s+(ne(ler)?|hangi konular(ı)?)\s+(konuştuk|yaptık|sordum)|"
+    r"(konuştuklarımızı|konustuklarimizi|yaptıklarımızı)\s+(özetle|ozetle|say|listele)", re.IGNORECASE)
+
+
 def kendi_belgesi_istegi(text):
     """'Kendini tanıtan bir Word belgesi oluştur' gibi istekler web araştırması değil, araçlı iş: derin araştırma
     hattı dosya yazamıyor ve uzun talimatı yanlış sorgulara çeviriyordu (04.11)."""
@@ -597,6 +604,31 @@ class Agent:
             print(f"[ORTAK SOHBET] {e}")
         return r
 
+    def _sohbet_dokumu(self, user_text, sinir=7000, mesaj_sinir=350):
+        """Sohbet özeti isteniyorsa bu sohbetin tüm mesajlarını (kısaltılmış) bağlam olarak döner, değilse ''."""
+        if not (self.memory and SOHBET_OZET_RE.search(user_text or "")):
+            return ""
+        try:
+            sid = self.memory.current_session_id
+            satirlar = ([(None, r, c) for r, c in self.memory.get_recent(400)] if sid is None
+                        else self.memory.get_session_messages(sid))
+        except Exception:
+            return ""
+        parca = []
+        for _, rol, icerik in satirlar:
+            t = " ".join((icerik or "").split())
+            if not t or (rol == "user" and t == " ".join((user_text or "").split())):
+                continue
+            t = t if len(t) <= mesaj_sinir else t[:mesaj_sinir] + "…"
+            parca.append(("Kullanıcı: " if rol == "user" else "FENIX: ") + t)
+        metin = "\n".join(parca)
+        if len(metin) > sinir:                       # çok uzun sohbet: başı ve sonu korunur
+            metin = metin[:sinir // 2] + "\n…(ara kısım kısaltıldı)…\n" + metin[-sinir // 2:]
+        if not metin:
+            return ""
+        return ("[BU SOHBETİN TAMAMI — özeti SADECE buna göre yap; başka sohbetlerden bilgi ekleme; yarıda "
+                "durdurulan ya da cevaplanmamış istekleri yapılmış sayma]\n" + metin)
+
     def _mod_oner(self, user_text, mode_key, r):
         """İş seçili moda göre büyükse cevabın sonuna mod önerisi eklenir (kullanıcı 'evet' derse uygulama geçer)."""
         metin = r.get("text") if isinstance(r, dict) else r
@@ -722,6 +754,11 @@ class Agent:
         self._plan(steps)
         self._stage("Anlıyorum")
         memory_context = self.memory.get_context(user_text) if self.memory else ""
+        tum = self._sohbet_dokumu(user_text)
+        if tum:
+            # "Bu sohbeti özetle": sadece bu sohbetin tamamı verilir, eski sohbetlerden kayıt karışmaz (07.11 testi:
+            # özete hiç geçmeyen bir belge girdi, ilk konular atlandı).
+            memory_context = tum
 
         message = user_text
         if want_screen:

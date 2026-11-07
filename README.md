@@ -6,6 +6,10 @@
 <p align="center"><b>Sesli, çok dilli kişisel masaüstü asistanı · Voice-enabled, multilingual desktop assistant</b><br>
 Windows · Python 3.12 · Gemini / Groq / NVIDIA</p>
 
+> [!IMPORTANT]
+> **Şu an yalnızca Windows 10 ve 11'de çalışır.** macOS ve Linux desteği henüz yok.
+> **Currently runs on Windows 10 and 11 only.** macOS and Linux are not supported yet.
+
 <p align="center">
 🇹🇷 <a href="docs/INSTALL_TR.md">Kurulum</a> ·
 🇬🇧 <a href="docs/INSTALL_EN.md">Setup</a> ·

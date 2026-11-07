@@ -81,3 +81,29 @@ def test_buyuk_iste_once_sorar_evet_gecis_hayir_bu_modda_yapar(monkeypatch, ayar
     assert yapilan == [istek] and r.startswith("Belge oluşturuldu.")
     ag.handle(istek, "normal", ayar["modes"]["normal"])               # reddedildi: bir daha sormaz, yapar
     assert yapilan == [istek, istek]
+
+
+def test_guvenli_modda_dosya_istegi_basta_sorulur_sohbet_istegi_sorulmaz():
+    """07.11 testi: Güvenli modda 'deneme.txt oluştur' 200 sn takıldı; artık model çağrılmadan Normal önerilir."""
+    assert mo.on_oneri('Masaüstüme deneme.txt diye bir dosya oluştur, içine "merhaba" yaz.', "safe")["mod"] == "normal"
+    assert mo.on_oneri("sesi biraz aç", "safe")["mod"] == "normal"
+    for sohbet in ("bana kısa bir şiir yaz", "Python ile Java farkını anlat", "saat kaç?"):
+        assert mo.on_oneri(sohbet, "safe") is None, sohbet
+    assert mo.on_oneri("Masaüstüme deneme.txt oluştur", "normal") is None
+
+
+def test_sadece_karsilastir_kelimesi_devil_onermez():
+    """07.11 testi: 'Aynı karşılaştırmayı C# için yap' isteğine gereksiz Devil önerisi çıktı."""
+    assert mo.oner("Hayır, aslında Java değil C# demek istemiştim. Aynı karşılaştırmayı C# için yap.", "normal",
+                   "Python dinamik tipli...") is None
+    assert mo.oner("Elektrikli araba pazarını araştır", "normal", "Kısa cevap.")["mod"] == "devil"
+    assert mo.oner("Bu konuda kaynaklı bir rapor hazırla", "normal", "Kısa cevap.")["mod"] == "devil"
+
+
+def test_benim_hakkimda_ne_ogrendin_ders_listesi_dokmez():
+    """07.11 testi (özel sürüm): 'benim hakkımda neler öğrendin?' öğrenme modülünün ders listesini döküyordu."""
+    import pytest
+    ogr = pytest.importorskip("modules.ogrenme")
+    t = "Tamam, tekrar Türkçeye dönelim. Bu sohbette benim hakkımda neler öğrendin?"
+    assert not (ogr._LAB_LIST.search(t) and not ogr._KISI_SORUSU.search(t))
+    assert ogr._LAB_LIST.search("neler öğrendin?") and not ogr._KISI_SORUSU.search("neler öğrendin?")
