@@ -125,3 +125,18 @@ def test_codeql_duzeltmeleri_kalici():
         assert "TLSv1_2" in inspect.getsource(fn)
     assert _gizli_yorum("<!-- Core: MK-Agentic-System -->") and not _gizli_yorum("<!-- a --> metin <!-- b -->")
     assert audit_rules._EMOJI_RE.sub("", "Merhaba 😀 ☀️ dünya") == "Merhaba   dünya"
+
+
+def test_ses_ayari_yeni_pycaw_surumuyle_calisir(monkeypatch):
+    """07.11 üçüncü test: yeni pycaw'da GetSpeakers() 'AudioDevice' döner, Activate yok → ses ayarı hata veriyordu."""
+    import sys, types
+    hedef = object()
+    pycaw = types.ModuleType("pycaw"); alt = types.ModuleType("pycaw.pycaw")
+    alt.AudioUtilities = types.SimpleNamespace(GetSpeakers=lambda: types.SimpleNamespace(EndpointVolume=hedef))
+    alt.IAudioEndpointVolume = object
+    comtypes = types.ModuleType("comtypes"); comtypes.CLSCTX_ALL = 23
+    monkeypatch.setitem(sys.modules, "pycaw", pycaw)
+    monkeypatch.setitem(sys.modules, "pycaw.pycaw", alt)
+    monkeypatch.setitem(sys.modules, "comtypes", comtypes)
+    from modules import pc_tools
+    assert pc_tools._volume_endpoint() is hedef

@@ -144,7 +144,19 @@ def report_error(where, detail):
             pass
 
 
+ISLEM_SAYACI = [0]      # bilgisayarda değişiklik yapan işlem bildirimleri (yapmadan "yaptım" kontrolü için)
+_OKUMA_BILDIRIMI = ("Aranıyor", "Dosya okunuyor", "Sayfa okunuyor", "Dosya aranıyor", "Groq", "NVIDIA", "Eklenti",
+                    "Klasör listeleniyor", "Ekran", "Hatırlatmalar", "Kendi bilgi")
+
+
+def islem_say(text):
+    """Bildirim bir değişiklik işlemiyse sayacı artırır (okuma/arama bildirimleri sayılmaz)."""
+    if not str(text or "").startswith(_OKUMA_BILDIRIMI):
+        ISLEM_SAYACI[0] += 1
+
+
 def _notify(text):
+    islem_say(text)
     if _NOTIFY_HANDLER:
         try:
             _NOTIFY_HANDLER(text)
@@ -286,7 +298,13 @@ def open_app_by_name(app_name: str):
         _speak(f"{app_name} açılıyor")
     except Exception:
         pass
-    return _exec_ps(ps)
+    sonuc = _exec_ps(ps)
+    if isinstance(sonuc, dict) and sonuc.get("status") == "ok" and "BULUNAMADI" not in str(sonuc.get("message", "")):
+        SON_ACILAN.update(ad=app_name, zaman=time.time())     # "bunu kapat" bunu hedefler (07.11 testi)
+    return sonuc
+
+
+SON_ACILAN = {"ad": None, "zaman": 0.0}
 
 
 _OPEN_TIMES = []          # son open_url çağrı zamanları (sekme sayısını sınırlamak için)
@@ -483,12 +501,8 @@ def set_system_volume(level: int):
     except Exception:
         pass
     try:
-        from ctypes import cast, POINTER
-        from comtypes import CLSCTX_ALL
-        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-        dev = AudioUtilities.GetSpeakers()
-        iface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        vol = cast(iface, POINTER(IAudioEndpointVolume))
+        from .pc_tools import _volume_endpoint        # pycaw eski/yeni sürüm uyumlu
+        vol = _volume_endpoint()
         vol.SetMasterVolumeLevelScalar(max(0, min(level, 100)) / 100, None)
         return {"status": "ok", "message": f"Ses %{level}."}
     except Exception as e:

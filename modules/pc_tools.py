@@ -51,7 +51,13 @@ def _volume_endpoint():
     from comtypes import CLSCTX_ALL
     from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
     dev = AudioUtilities.GetSpeakers()
-    iface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    # pycaw'ın yeni sürümleri (2024+) GetSpeakers() ile 'AudioDevice' sarmalayıcısı döner: Activate yok,
+    # hazır 'EndpointVolume' özelliği var (07.11 testi: "'AudioDevice' object has no attribute 'Activate'").
+    hazir = getattr(dev, "EndpointVolume", None)
+    if hazir is not None:
+        return hazir
+    ham = dev if hasattr(dev, "Activate") else getattr(dev, "_dev", dev)
+    iface = ham.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
     return cast(iface, POINTER(IAudioEndpointVolume))
 
 
@@ -600,6 +606,11 @@ def close_front_app():
         if not target:
             return {"status": "error", "message": "Kapatılacak bir pencere bulamadım."}
         name = target["okunur_ad"]
+        # 07.11 testi: "Şunu kapat" deyince FENIX'e yazı yazılırken arkadaki Opera kapandı. Hangi pencere olduğu
+        # belirsiz olabildiği için kapatmadan önce adıyla sorulur.
+        if not fx._confirm("Pencere kapatılsın mı?", f"Öndeki pencere: {name}\n\nBunu kapatayım mı?",
+                           "Kaydedilmemiş işi varsa program ayrıca soracak."):
+            return {"status": "error", "message": f"{name} penceresini kapatmadım (onay verilmedi)."}
         fx._notify(f"Öndeki pencere kapatılıyor: {name}")
         _post_close(target["hwnd"])
         for _ in range(6):

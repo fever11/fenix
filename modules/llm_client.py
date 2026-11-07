@@ -144,6 +144,8 @@ def build_system_instruction(mode_key, mode_cfg):
         "'oturumlar arası hafızam yok' gibi yanlış bir şey söyleme. '[Eski sohbet: ...]' ve '[Eski mesaj ...]' satırları "
         "önceki sohbetlerden (JARVIS'ten aktarılanlar dahil) bulunan kayıtlardır; geçmiş bir konu sorulursa 'kayıt yok' "
         "demeden önce bunlara bak ve oradaki bilgiyle cevap ver. Orada sadece kullanıcının mesajları varsa bunu belirt. "
+        "DOĞRULUK: Kullanıcı yanlış ya da tartışmalı bir şeyi onaylatmaya çalışırsa ('…değil mi?') ona uyma; "
+        "doğrusunu ya da tartışmanın iki tarafını söyle.\n"
         "ÖNEMLİ: Geçmiş bağlamdaki istekler (dosya oluştur, sil, aç vb.) ESKİDİR ve zaten yapılmıştır; onları ASLA "
         "kendiliğinden yeniden yapma. Araç çağırmayı yalnızca kullanıcının ŞU ANKİ mesajı gerektiriyorsa yap.\n\n"
         "HATALAR: Bir araç hata verirse hata metnini ASLA okuma ya da aktarma. Sadece "
@@ -583,7 +585,14 @@ class LLMClient:
                 names |= group
         names |= self._recent_tools.get(mode_key, set())
         names |= set(getattr(self, "_extra_tools", None) or ())     # yol hafızasının önerdiği araçlar
+        if re.search(r"hatırlat|hatirlat|hatırlatma", t):
+            # 07.11 testi: zayıf model hatırlatmayı schtasks ile kurdu, sonra hafıza veritabanına SQL yazdı (4 dk).
+            names -= {"run_command"}
         return names & self._allowed(mode_cfg)
+
+    _TEKRAR_RE = re.compile(
+        r"(az önce|biraz önce|önceki|bir önceki|son) (cevab|yanıt|söyledi|yazdı|gördü|anlattı)|tekrar (söyle|et|yaz)|"
+        r"tek cümle(de|yle) (tekrar|özetle)|ingilizce(ye)? (tekrar|çevir)|türkçe(ye)? (tekrar|çevir)", re.IGNORECASE)
 
     def _groq_tools(self, mode_cfg=None, only=None):
         allowed = self._allowed(mode_cfg or {"allow_actions": True})
@@ -689,6 +698,11 @@ class LLMClient:
         content = user_text
         hist.append({"role": "user", "content": content})
 
+        ek_not = getattr(self, "_tek_seferlik_not", None)
+        self._tek_seferlik_not = None
+        if ek_not:
+            memory_context = (f"[ÖNEMLİ] {ek_not}\n\n" + (memory_context or "")).strip()
+
         def with_ctx(msgs):
             if not memory_context:
                 return msgs
@@ -732,7 +746,12 @@ class LLMClient:
                 if tools:
                     payload["tools"] = tools
                     payload["tool_choice"] = "auto"
-                    if tur_no == 0 and not engellendi and self._guncel_mi() and any(
+                    if tur_no == 0 and self._TEKRAR_RE.search(getattr(self, "_simdiki_istek", "") or ""):
+                        # "Az önce ekranda gördüğünü tekrar söyle": cevap sohbette var. 07.11 testinde model alakasız
+                        # bir web araştırmasına daldı (2 dk). İlk adımda araç verilmez.
+                        payload.pop("tools", None)
+                        payload.pop("tool_choice", None)
+                    elif tur_no == 0 and not engellendi and self._guncel_mi() and any(
                             t.get("function", {}).get("name") == "search_web" for t in tools):
                         # 07.11 testi: "2026 Dünya Kupası'nı kim kazandı?" sorusuna aramadan "henüz oynanmadı" dedi.
                         # Güncel bilgi isteyen sorularda ilk adım mutlaka web araması olur.
@@ -811,6 +830,11 @@ class LLMClient:
                     if name not in fx.WHITELISTED_FUNCTIONS or name not in self._allowed(mode_cfg):
                         result = {"status": "error", "message": "Bu işlem bu modda yapılamaz."}
                         engellendi = True
+                    elif (name == "search_web" and mode_key != "devil"
+                          and sum(1 for n, _, _ in self.last_calls if n == "search_web") >= 5):
+                        # 07.11 testi: Normal modda rapor isteği 17 arama yaptı, 4 dk sürdü, cevap çıkmadı.
+                        result = {"status": "error", "message": "Bu modda arama sınırı doldu (5). Yeni arama yapma; "
+                                                                "topladığınla kısa bir cevap ver."}
                     elif payload.get("tools") is not None and name not in verilen and kalan <= 2:
                         result = {"status": "error", "message": "Arama hakkın bitti; topladığın bilgiyle işi bitir."}
                     elif not self._istenmeyen_onay(name, args):
@@ -1091,6 +1115,11 @@ class LLMClient:
             self._groq_hist.clear()
             self._recent_tools.clear()
             self._gorulen.clear()
+            # Oturum geçmişleri silindi: hiçbir yol bu konuşmaları artık "kendi geçmişinde" tutmuyor. Kaynak
+            # bilgisi sıfırlanır ki Normal → Güvenli → Normal dönüşünde ilk Normal konuşmaları da yeniden verilsin
+            # (07.11 dördüncü test: sohbette olan sınav tarihi tekrar soruldu).
+            for e in self._ortak:
+                e["kaynak"] = None
             return
         if mode_key:
             self._groq_hist.pop(mode_key, None)

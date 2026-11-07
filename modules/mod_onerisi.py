@@ -81,6 +81,17 @@ def on_oneri(user_text, mode_key, reddedilen=None):
         if time.time() - (reddedilen or {}).get("normal", 0) > RED_SURESI_SN:
             return {"mod": "normal", "sebep": "bu iş bilgisayarında değişiklik gerektiriyor; Güvenli mod sadece okur, "
                                               "Normal modda yaparım ve riskli adımlarda yine onay sorarım"}
+    if mode_key in ("safe", "normal") and ARASTIRMA_RE.search(user_text or "") and not buyuk_is_mi(user_text):
+        # 07.11 testi: Normal modda "kaynaklı rapor hazırla" 17 arama yapıp 4 dk sonra boş döndü. Baştan sorulur.
+        try:
+            from .agent import kendi_belgesi_istegi
+            kendi = kendi_belgesi_istegi(user_text)
+        except Exception:
+            kendi = False
+        if not kendi and time.time() - (reddedilen or {}).get("devil", 0) > RED_SURESI_SN:
+            return {"mod": "devil", "sebep": "bu bir araştırma/rapor isteği; Devil modda plan çıkarıp çok sayıda kaynağı "
+                                             "okur ve kaynaklı bir rapor hazırlarım, burada sadece kısa bir cevap "
+                                             "verebilirim"}
     if mode_key not in ("safe", "normal") or not buyuk_is_mi(user_text):
         return None
     if time.time() - (reddedilen or {}).get("devil", 0) <= RED_SURESI_SN:

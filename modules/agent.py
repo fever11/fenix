@@ -127,10 +127,21 @@ KENDI_KONU_RE = re.compile(r"tanıt|anlat|özellik|yapabil|mod(un|lar|ların|unu
                            r"belge|rapor|nasıl çalış", re.IGNORECASE)
 
 
+# 07.11 testi: "Hangi yapay zeka modellerini kullanıyorsun ve mesajlarım nereye gidiyor?" sorusunda 'kendin/FENIX'
+# geçmediği için gerçek bilgi verilmedi; zayıf model "harici sunucuya gönderilmez" diye yanlış cevap verdi.
+KENDI_DOGRUDAN_RE = re.compile(
+    r"(hangi|ne tür|nasıl bir) (yapay zeka |yapay zekâ |ai |dil )?model(ler)?(ini|i)? kullanıyorsun|"
+    r"model(in|iniz) ne|mesajlarım nereye|verilerim nereye|verilerimi (kim|nereye)|bilgilerim nereye|"
+    r"gizlili(k|ğin)|beni dinliyor musun|internete gönderiyor musun|sunucuya gönder|hangi sürüm(desin|sün)|"
+    r"neler yapabiliyorsun|neler yapabilirsin|hangi modların var|modların neler|"
+    r"seni (kim|kimler) (geliştirdi|yaptı|yarattı|yazdı)|lisans(ın|la|ı|i)?\b|kodun (açık|hangi)|"
+    r"açık kaynak mısın|kaynak kodun", re.IGNORECASE)
+
+
 def kendi_bilgisi(text):
     """FENIX'in kendisiyle ilgili bir istekse fenix_hakkinda çıktısı (modele bağlam olarak verilir), değilse ''."""
     t = text or ""
-    if not (KENDISI_RE.search(t) and KENDI_KONU_RE.search(t)):
+    if not ((KENDISI_RE.search(t) and KENDI_KONU_RE.search(t)) or KENDI_DOGRUDAN_RE.search(t)):
         return ""
     try:
         from . import fenix_bilgi
@@ -149,6 +160,13 @@ SOHBET_OZET_RE = re.compile(
     r"(\s+\S+){0,3}?\s+(özetle|ozetle|özetler|özet(ini)? (çıkar|ver|yaz)|toparla)|"
     r"(bu sohbette|bugün|şimdiye kadar|az önce)\s+(ne(ler)?|hangi konular(ı)?)\s+(konuştuk|yaptık|sordum)|"
     r"(konuştuklarımızı|konustuklarimizi|yaptıklarımızı)\s+(özetle|ozetle|say|listele)", re.IGNORECASE)
+
+
+EYLEM_ISTEK_RE = re.compile(r"\b(sil|oluştur|olustur|kaydet|ekle|yaz|kapat|aç|taşı|kopyala|değiştir|düzenle|"
+                            r"yeniden adlandır|kur|yükle|gönder|ayarla)\b|(sil|ekle|yaz|kapat|aç)(ar mısın|abilir)",
+                            re.IGNORECASE)
+YAPILDI_RE = re.compile(r"işlem tamamlandı|tamamlandı|yaptım|silindi|sildim|oluşturuldu|oluşturdum|kaydedildi|"
+                        r"kaydettim|eklendi|ekledim|kapatıldı|kapattım|açıldı|güncellendi|done", re.IGNORECASE)
 
 
 def kendi_belgesi_istegi(text):
@@ -510,6 +528,16 @@ class Agent:
             return "Güvenli moddayım, pencere kapatmıyorum. Normal moda geçersen kapatırım."
         tool, args = {"close": ("close_front_app", {}), "running": ("pc_awareness", {"kind": "running"}),
                       "slow": ("pc_awareness", {"kind": "slow"})}[kind]
+        son = getattr(fx, "SON_ACILAN", {}) or {}
+        if kind == "close" and son.get("ad") and time.time() - son.get("zaman", 0) < 600 \
+                and "close_app" in fx.WHITELISTED_FUNCTIONS:
+            # 07.11 testi: Hesap Makinesi'ni açtırıp "bunu kapat" deyince arkadaki Opera hedeflendi. FENIX'in az önce
+            # açtığı uygulama, "bunu"nun en olası anlamıdır: önce adıyla sorulur, sonra o kapatılır.
+            ad = son["ad"]
+            if not fx._confirm("Uygulama kapatılsın mı?", f"Az önce açtığım {ad} kapatılsın mı?", ""):
+                return f"{ad} uygulamasını kapatmadım."
+            fx.SON_ACILAN.update(ad=None, zaman=0.0)
+            tool, args = "close_app", {"app_name": ad}
         fn = fx.WHITELISTED_FUNCTIONS.get(tool)
         if not fn:
             return None
@@ -584,14 +612,37 @@ class Agent:
         reddedilen = self.__dict__.setdefault("_reddedilen_mod", {})
         if bekleyen and mod_onerisi.red_mi(user_text):
             reddedilen[bekleyen["mod"]] = time.time()
+            if bekleyen.get("once") and mode_key == "safe" and bekleyen["mod"] == "normal":
+                # 07.11 testi: Güvenli modda "sil" isteğine 'hayır' denince FENIX yine silmeye uğraşıp onay sordu.
+                # Güvenli mod bu işi zaten yapamaz: iş yapılmaz, net söylenir.
+                return ("Tamam, Güvenli modda kalıyoruz; bu işlemi yapmadım. İstersen sonra Normal moda geçip "
+                        "tekrar söyleyebilirsin.")
             if bekleyen.get("once"):                     # "önce sorayım"a hayır: asıl istek bu modda yapılır
                 user_text = bekleyen["metin"]
+                if bekleyen["mod"] == "devil":
+                    try:
+                        self.llm._tek_seferlik_not = ("Kullanıcı Devil moduna geçmek İSTEMEDİ. Bu modda kısa ve öz "
+                                                      "cevap ver: en fazla 3 arama yap, sonra topladığınla 1-2 "
+                                                      "paragraf ve kaynak bağlantılarıyla cevapla.")
+                    except Exception:
+                        pass
         elif not attachments:
             on = mod_onerisi.on_oneri(user_text, mode_key, reddedilen)
             if on:
                 self._bekleyen_mod = dict(on, metin=user_text, zaman=time.time(), once=True)
+                # Bu soru-cevap ortak sohbete YAZILMAZ: yeni modda iş yeniden çalışınca model kendi "geçeyim mi?"
+                # sorusunu görüp bir daha soruyordu (07.11 dördüncü test).
                 return mod_onerisi.on_soru_metni(on, mode_key)
+        try:
+            self.llm.last_calls = []
+        except Exception:
+            pass
+        self._islem_basi = fx.ISLEM_SAYACI[0]
         r = self._handle_ic(user_text, mode_key, mode_cfg, force_screen=force_screen, attachments=attachments)
+        try:
+            r = self._yapmadan_yaptim_kontrol(user_text, r)
+        except Exception as e:
+            print(f"[YAPILDI KONTROLÜ] {e}")
         try:
             r = self._mod_oner(user_text, mode_key, r)
         except Exception as e:
@@ -629,6 +680,25 @@ class Agent:
         return ("[BU SOHBETİN TAMAMI — özeti SADECE buna göre yap; başka sohbetlerden bilgi ekleme; yarıda "
                 "durdurulan ya da cevaplanmamış istekleri yapılmış sayma]\n" + metin)
 
+    def _yapmadan_yaptim_kontrol(self, user_text, r):
+        """07.11 testi: 'özetle, sonra sinav_notu.txt'yi sil' isteğine model hiçbir araç çağırmadan '[İşlem
+        tamamlandı]' dedi; dosya duruyordu. İstekte bir eylem varken cevap 'yaptım' diyor ama bu turda değiştiren hiçbir
+        araç başarıyla çalışmadıysa, kullanıcı açıkça uyarılır."""
+        metin = r.get("text") if isinstance(r, dict) else r
+        if not isinstance(metin, str) or not EYLEM_ISTEK_RE.search(user_text or ""):
+            return r
+        if not YAPILDI_RE.search(metin):
+            return r
+        calls = getattr(self.llm, "last_calls", None) or []
+        basarili = [n for n, _, res in calls if n not in fx.READONLY_FUNCTIONS
+                    and isinstance(res, dict) and res.get("status") == "ok"]
+        if basarili or fx.ISLEM_SAYACI[0] > getattr(self, "_islem_basi", fx.ISLEM_SAYACI[0]):
+            return r                                  # model ya da yerel komut gerçekten bir işlem yaptı
+        uyari = ("\n\n⚠️ Dikkat: Bu turda bilgisayarında hiçbir değişiklik yapılmadı (işlem aracı çalışmadı). "
+                 "İstediğin işlem gerçekleşmemiş olabilir; kontrol edip bir daha söyler misin?")
+        print("[YAPILDI KONTROLÜ] 'yaptım' dendi ama değiştiren araç çalışmadı")
+        return dict(r, text=metin + uyari) if isinstance(r, dict) else metin + uyari
+
     def _mod_oner(self, user_text, mode_key, r):
         """İş seçili moda göre büyükse cevabın sonuna mod önerisi eklenir (kullanıcı 'evet' derse uygulama geçer)."""
         metin = r.get("text") if isinstance(r, dict) else r
@@ -653,6 +723,14 @@ class Agent:
         self._bekleyen_mod = None
         if time.time() - b.get("zaman", 0) > mod_onerisi.GECERLILIK_SN:
             return None
+        # Yeniden çalıştırılan isteğe, onayın zaten alındığı ve önceki konuşmanın kullanılacağı söylenir
+        try:
+            self.llm._tek_seferlik_not = (
+                f"Kullanıcı {mod_onerisi.ETIKET.get(b['mod'], b['mod'])} moda geçmeyi ONAYLADI ve mod değişti. "
+                "Mod hakkında bir daha soru sorma; isteği şimdi yap. İstekte geçen bilgiler (tarih, ad, ders vb.) "
+                "bu sohbetin önceki mesajlarında varsa oradan al, kullanıcıya tekrar sorma.")
+        except Exception:
+            pass
         return {"mod": b["mod"], "sebep": b["sebep"], "metin": b["metin"]}
 
     def _handle_ic(self, user_text, mode_key, mode_cfg, force_screen=False, attachments=None):

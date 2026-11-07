@@ -19,6 +19,23 @@
   atlanmaz, yarıda durdurulan istekler yapılmış sayılmaz.
 - **TR:** Sohbette LaTeX formülleri (`\(80 \text{km} \times 2\)`) düz yazıya çevrilir; dosya içeriği gösterirken çıkan
   ``` çitleri kalkar (dil etiketli kod blokları kalır). Her cevabın başında süresi görünür ("FENIX · 2.3 sn").
+- **TR:** Ses ayarı yeni pycaw sürümüyle çalışır ("'AudioDevice' object has no attribute 'Activate'" hatası).
+- **TR:** "Şunu kapat" gibi belirsiz kapatma isteklerinde FENIX pencerenin adını söyleyip önce sorar (testte arkadaki
+  Opera kapanmıştı).
+- **TR:** "Hangi modelleri kullanıyorsun, mesajlarım nereye gidiyor?" gibi sorularda gerçek bilgi verilir.
+- **TR:** Güvenli modda bir işleme "Normal'e geçeyim mi?" sorusuna "hayır" denince işlem denenmez, net söylenir.
+- **TR:** Mod değişiminden sonra iş yeniden çalışınca FENIX "bu modda mı yapayım?" diye tekrar sormaz; Normal →
+  Güvenli → Normal dönüşünde önceki mesajlar (ör. sınav tarihi) kaybolmaz.
+- **TR:** "Bunu kapat" FENIX'in az önce açtığı uygulamayı hedefler (testte Hesap Makinesi yerine Opera soruluyordu).
+- **TR:** Normal modda araştırma/rapor isteğinde başlamadan Devil önerilir; "hayır" denirse kısa cevap verilir ve
+  Normal/Güvenli modda en fazla 5 arama yapılır (testte 17 arama, 4 dk, boş sonuç).
+- **TR:** "Az önce … tekrar söyle" gibi isteklerde ilk adımda araç verilmez (testte alakasız web araştırması yaptı).
+  Hatırlatma isteklerinde komut çalıştırma (schtasks) kapalı; sadece hatırlatma araçları kullanılır.
+- **TR:** "Seni kim geliştirdi, hangi lisans?" sorusunda gerçek bilgi (GPL-3.0) verilir. Model, "…değil mi?" diye
+  yanlış bir şey onaylatılmaya çalışılınca uymaz. Sohbette kod blokları düzgün gösterilir (# yorumlar başlık olmaz).
+- **TR:** Yapmadan "yaptım" kontrolü: istekte bir işlem (sil, oluştur, kapat…) varken cevap "tamamlandı/silindi"
+  diyor ama o turda bilgisayarda hiçbir değişiklik yapılmadıysa cevabın altına açık bir uyarı eklenir (testte
+  "[İşlem tamamlandı]" denmiş, dosya silinmemişti).
 - **EN:** Unwanted-action shield: requests from old chats in the memory context are marked as information only, and a
   changing tool called without an action request in the current message now asks for confirmation first.
 

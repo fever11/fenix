@@ -74,3 +74,20 @@ def test_uzun_istekte_bolum_kelimeleri_arac_yagdirmaz(ayar):
     assert not sec & {"set_reminder", "stop_process", "set_voice", "save_shortcut", "media_control"}
     assert len(sec) <= 15
     assert "set_reminder" in llm._select_tools("normal", ayar["modes"]["normal"], "yarın 9'da hatırlat")
+
+
+def test_model_ve_gizlilik_sorusu_kendi_bilgisini_getirir(ayar):
+    """07.11 üçüncü test: 'Hangi modelleri kullanıyorsun, mesajlarım nereye gidiyor?' gerçek bilgiyi almıyordu."""
+    _kur(ayar)
+    from modules.agent import kendi_bilgisi
+    for soru in ("Hangi yapay zeka modellerini kullanıyorsun ve mesajlarım nereye gidiyor?",
+                 "verilerim nereye gidiyor?", "neler yapabiliyorsun?"):
+        assert "İnternete çıkanlar" in kendi_bilgisi(soru), soru
+    assert kendi_bilgisi("Python'da hangi model daha iyi: lineer regresyon mu?") == ""
+
+
+def test_lisans_ve_gelistirici_sorusu_kendi_bilgisini_getirir(ayar):
+    _kur(ayar)
+    from modules.agent import kendi_bilgisi
+    b = kendi_bilgisi("Seni kim geliştirdi ve kodun hangi lisansla yayınlandı?")
+    assert "GPL-3.0" in b and "Mustafa Koç" in b

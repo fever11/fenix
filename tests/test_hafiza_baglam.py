@@ -347,3 +347,28 @@ def test_sohbet_ozeti_sadece_bu_sohbetten(tmp_path):
         assert SOHBET_OZET_RE.search(t), t
     for t in ("bu makaleyi özetle", "sohbet uygulaması yaz"):
         assert not SOHBET_OZET_RE.search(t), t
+
+
+def test_tekrar_istegi_aracsiz_ve_arama_siniri(monkeypatch, ayar):
+    """07.11 dördüncü test: 'az önce ekranda gördüğünü tekrar söyle' web araştırmasına daldı; Normal'de 17 arama."""
+    from modules import functions as fx
+    llm, giden = _llm_ve_kayit(monkeypatch)
+    llm._simdiki_istek = "Az önce ekranda gördüğün şeyi tek cümleyle tekrar söyle."
+    llm._groq_agent_chat("normal", ayar["modes"]["normal"], llm._simdiki_istek)
+    assert "tools" not in giden[-1]
+    sayac = {"n": 0}
+    monkeypatch.setitem(fx.WHITELISTED_FUNCTIONS, "search_web", lambda **a: sayac.__setitem__("n", sayac["n"] + 1)
+                        or {"status": "ok"})
+
+    def sahte(payload, **k):
+        giden.append(payload)
+        if payload.get("tools"):
+            return {"choices": [{"message": {"content": "", "tool_calls": [
+                {"id": f"s{len(giden)}{i}", "type": "function",
+                 "function": {"name": "search_web", "arguments": "{\"query\": \"x\"}"}} for i in range(3)]}}]}
+        return {"choices": [{"message": {"content": "özet"}}]}
+    monkeypatch.setattr(llm, "_groq_post", sahte)
+    llm._simdiki_istek = "yapay zeka kullanımı hakkında bilgi ver"
+    llm._groq_agent_chat("normal", ayar["modes"]["normal"], llm._simdiki_istek)
+    assert sayac["n"] <= 5
+    assert "run_command" not in llm._select_tools("normal", ayar["modes"]["normal"], "yarın 9'da hatırlat")

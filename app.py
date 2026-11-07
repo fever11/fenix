@@ -2086,6 +2086,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self.chat.tag_config("sys", foreground=MUTED)
         self.chat.tag_config("b", foreground="#ffffff")
         self.chat.tag_config("head", foreground=CYAN)
+        self.chat._textbox.tag_config("code", foreground="#c4f1be", font=("Consolas", 11))   # kod blokları
         # etiket satırları (CTkTextbox 'font' kabul etmez: alttaki Tk metin kutusuna verilir)
         self.chat._textbox.tag_config("user_lbl", foreground=MUTED, font=(FONT_MONO, 10), spacing1=6)
         self.chat._textbox.tag_config("fenix_lbl", foreground=self._accent(), font=(FONT_MONO, 10), spacing1=6)
@@ -2408,8 +2409,20 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             self.chat.insert("end", text)
             return
         lines = text.split("\n")
+        kodda = False
         for i, line in enumerate(lines):
             st = line.strip()
+            if st.startswith("```"):
+                # Kod bloğu (07.11 testi): içindeki '# yorum' satırları başlık sanılıyor, ` işaretleri siliniyordu.
+                kodda = not kodda
+                if i < len(lines) - 1:
+                    self.chat.insert("end", "\n")
+                continue
+            if kodda:
+                self.chat.insert("end", line, "code")
+                if i < len(lines) - 1:
+                    self.chat.insert("end", "\n")
+                continue
             if re.fullmatch(r"-{3,}|\*{3,}|_{3,}", st):
                 line = ""
             elif re.match(r"^#{1,6}\s+", st):
