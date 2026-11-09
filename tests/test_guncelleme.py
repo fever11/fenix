@@ -54,3 +54,20 @@ def test_ag_hatasi_sessiz_ve_6_saat_sinir():
 def test_ayarlardan_kapatilabilir():
     user_settings.set("guncelleme_denetle", False)
     assert g.denetle(getir=lambda url: pytest.fail("kapalıyken istek atıldı")) is None
+
+
+def test_onbellek_yerel_surumden_bagimsiz(monkeypatch):
+    """09.11: 1.2.2'de açılıp sürüm 1.2.1'e alınınca, önbellekteki 'yeni yok' sonucu bildirimi 6 saat engelliyordu."""
+    monkeypatch.setattr(g, "VERSION", "1.2.2")
+    assert g.denetle(zorla=True, getir=lambda url: _surum("v1.2.2")) is None
+    monkeypatch.setattr(g, "VERSION", "1.2.1")
+    b = g.denetle(getir=lambda url: pytest.fail("önbellek varken istek atıldı"))
+    assert b and b["etiket"] == "v1.2.2"
+
+
+def test_ozet_sadece_ilk_bolumun_maddeleri(monkeypatch):
+    """09.11 denemesi: özete '> Sadece Windows' uyarısı girmiş, bant metni sıkışmıştı."""
+    govde = ("> **Sadece Windows 10 ve 11.**\n\n## Yenilikler\n- **Güncelleme bildirimi:** küçük bildirim.\n"
+             "- Sohbet düzeltmeleri: uyarılar.\n\n## What's new\n- **Update notice:** small notice.")
+    b = g.denetle(zorla=True, getir=lambda url: _surum("v9.0.0", body=govde))
+    assert b["ozet"] == "Güncelleme bildirimi · Sohbet düzeltmeleri"

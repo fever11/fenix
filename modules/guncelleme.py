@@ -78,18 +78,31 @@ def atla(etiket):
     _durum_yaz(d)
 
 
-def _cozumle(veri):
-    """GitHub 'latest release' cevabından bildirim bilgisini çıkarır; uygun değilse None."""
+def _cozumle(veri, yerel=None):
+    """GitHub 'latest release' cevabından sürüm bilgisini çıkarır. yerel verilirse sadece daha yeniyse döner."""
     if not isinstance(veri, dict) or veri.get("draft") or veri.get("prerelease"):
         return None
     etiket = str(veri.get("tag_name") or "").strip()
-    if not etiket or not daha_yeni_mi(etiket):
+    if not etiket or not surum_tuple(etiket) or (yerel is not None and not daha_yeni_mi(etiket, yerel)):
         return None
     sayfa = veri.get("html_url")
     if not guvenli_adres(sayfa):
         sayfa = RESMI_SAYFA
-    notlar = re.sub(r"[#>*_`]+", "", str(veri.get("body") or "")).strip()
-    satirlar = [s.strip(" -•\t") for s in notlar.splitlines() if s.strip(" -•\t")]
+    # Özet: notlardaki madde satırları (başlık "##" ve uyarı ">" satırları değil). 09.11 denemesinde özete
+    # "Sadece Windows 10 ve 11" uyarısı girmiş, asıl yenilikler görünmemişti.
+    satirlar = []
+    for ham in str(veri.get("body") or "").splitlines():
+        st = ham.strip()
+        if st.startswith("#") and satirlar:
+            break                                   # sadece ilk bölüm (ör. Türkçe "Yenilikler"); çeviri tekrar etmez
+        if not re.match(r"^[-*•]\s+", st):
+            continue
+        st = re.sub(r"^[-*•]\s+", "", st)
+        st = re.sub(r"\*\*([^*]+)\*\*", r"\1", st)
+        st = re.sub(r"[*_`]+", "", st).strip()
+        st = st.split(":")[0].strip() if ":" in st[:40] else st.split(".")[0].strip()   # kısa başlık kısmı
+        if st and st not in satirlar:
+            satirlar.append(st)
     return {"etiket": etiket, "surum": etiket.lstrip("vV"), "ad": str(veri.get("name") or etiket)[:80],
             "sayfa": sayfa, "ozet": " · ".join(satirlar[:3])[:240]}
 
@@ -123,7 +136,9 @@ def denetle(zorla=False, getir=None):
             return None
         d.update(son_denetim=simdi, son_bulunan=bilgi)
         _durum_yaz(d)
-    if not bilgi or not daha_yeni_mi(bilgi.get("etiket")) or d.get("atlanan") == bilgi.get("etiket"):
+    # Önbellekte yerel sürümden bağımsız olarak depodaki son sürüm tutulur; karşılaştırma her seferinde yapılır
+    # (09.11: 1.2.2'de açılıp sonra sürüm 1.2.1'e alınınca 'yeni yok' sonucu 6 saat önbellekte kalıyordu).
+    if not bilgi or not daha_yeni_mi(bilgi.get("etiket"), VERSION) or d.get("atlanan") == bilgi.get("etiket"):
         return None
     return bilgi
 

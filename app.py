@@ -3093,8 +3093,8 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             if getattr(self, "_gunc_bant", None) is not None and self._gunc_bant.winfo_exists():
                 self._gunc_bant.destroy()
             bant = ctk.CTkFrame(self.chat, fg_color="#0f3b2e", corner_radius=8, border_width=1, border_color="#22c55e")
-            metin = (f"🔔 Yeni sürüm: FENIX {bilgi['surum']} çıktı (sende {FENIX_VERSION})"
-                     + (f"\n{bilgi['ozet']}" if bilgi.get("ozet") else ""))
+            ust = ctk.CTkFrame(bant, fg_color="transparent")
+            ust.pack(fill="x", padx=8, pady=(6, 0))
 
             def kapat():
                 try:
@@ -3111,14 +3111,17 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             def atla():
                 GUNC.atla(bilgi["etiket"])
                 kapat()
-            dugmeler = ctk.CTkFrame(bant, fg_color="transparent")       # düğmeler önce yerleşir, metin kalan alana
-            dugmeler.pack(side="right", padx=(0, 6), pady=6)
             for yazi, fn, renk in (("✕", kapat, PANEL2), ("Atla", atla, PANEL2), ("Neler yeni", sayfa, "#16a34a")):
-                ctk.CTkButton(dugmeler, text=yazi, command=fn, fg_color=renk, hover_color=CYAN, text_color=TEXT,
+                ctk.CTkButton(ust, text=yazi, command=fn, fg_color=renk, hover_color=CYAN, text_color=TEXT,
                               width=30 if yazi == "✕" else 86, height=28).pack(side="right", padx=(4, 0))
-            ctk.CTkLabel(bant, text=metin, text_color=TEXT, font=("Segoe UI", 12), justify="left", anchor="w",
-                         wraplength=max(200, int(self.chat.winfo_width() or 600) - 300)).pack(
-                side="left", fill="x", expand=True, padx=(10, 6), pady=6)
+            ctk.CTkLabel(ust, text=f"🔔 FENIX {bilgi['surum']} çıktı (sende {FENIX_VERSION})", text_color=TEXT,
+                         font=("Segoe UI", 12, "bold"), anchor="w").pack(side="left", fill="x", expand=True)
+            if bilgi.get("ozet"):
+                genislik = max(300, int(self.chat.winfo_width() or 700) - 60)
+                ctk.CTkLabel(bant, text=bilgi["ozet"], text_color=TEXT, font=("Segoe UI", 11), justify="left",
+                             anchor="w", wraplength=genislik).pack(fill="x", padx=10, pady=(2, 6))
+            else:
+                ctk.CTkFrame(bant, height=4, fg_color="transparent").pack()
             bant.place(relx=0.01, rely=0.01, relwidth=0.98)
             self._gunc_bant = bant
             if not self._window_in_front() and user_settings.get("cevap_bildirimi", True):
