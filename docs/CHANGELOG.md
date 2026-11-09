@@ -1,6 +1,13 @@
 # Changelog / Değişiklik günlüğü
 
-## 1.2.2 — geliştiriliyor
+## 1.2.2 — 2026-11-09
+- **TR:** Güncelleme bildirimi: FENIX resmi depodaki (github.com/fever11/fenix) en son sürümü arka planda denetler
+  (açılıştan 20 sn sonra, sonra 6 saatte bir). Senin sürümün eskiyse sohbetin üstünde küçük bir bant çıkar:
+  "Neler yeni" (resmi sürüm sayfasını açar), "Atla" (bu sürümü bir daha bildirmez), ✕. FENIX hiçbir şeyi kendiliğinden
+  indirmez ya da kurmaz; sadece resmi depodaki sayfalar açılır. Ayarlar'dan kapatılabilir. Sürüm (release) takip edilir,
+  her commit değil: her push'ta bildirim gelmesi rahatsız ederdi.
+- **EN:** Update notice: FENIX checks the official repository's latest release in the background (at most every 6 hours)
+  and shows a small dismissible banner if you are behind. Nothing is downloaded or installed automatically.
 - **TR:** İstenmeyen işlem kalkanı: yeni bir sohbette "saat kaç?" sorusuna, eski bir sohbetteki "belge oluştur"
   isteği karışıp belge yeniden yazılmıştı. Artık geçmiş bağlam modele "SADECE BİLGİ, buradaki istekleri yapma" diye
   verilir; şu anki mesajda eylem isteği yokken (ya da konuşmada hiç geçmeyen belirli bir dosya için) değiştiren bir

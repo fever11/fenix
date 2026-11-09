@@ -27,6 +27,7 @@ göndererek çalışır; bu servislerin kendi gizlilik politikaları geçerlidir
 | NVIDIA | Messages (backup chat), screenshots (last-resort vision) / Mesajlar (yedek sohbet), ekran görüntüsü (son yedek) | If an NVIDIA key is set / NVIDIA anahtarı varsa |
 | Google speech recognition | Voice recordings / Ses kaydı | If Groq is not used / Groq kullanılmıyorsa |
 | Microsoft Edge read-aloud (edge-tts) | Text that FENIX speaks / FENIX'in sesli okuduğu metin | Voice replies on / Sesli cevap açıksa |
+| GitHub (api.github.com) | Nothing personal: an anonymous request for the latest FENIX release number / Kişisel hiçbir şey: en son FENIX sürüm numarası için kimliksiz bir istek | At most every 6 hours; can be turned off in Settings / En fazla 6 saatte bir; Ayarlar'dan kapatılabilir |
 | DuckDuckGo, Bing, Tavily, Brave, visited websites | Search queries, page requests / Arama sorguları, sayfa istekleri | Web search and research / Web araması ve araştırma |
 
 Screenshots are taken **only when you ask** (e.g. "what's on my screen"); the screen is never recorded continuously.

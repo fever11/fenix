@@ -52,7 +52,8 @@ except ImportError:
     OGR = None
 from modules import mcp_eklenti as MCPX     # eklentiler (MCP); 'mcp' paketi yoksa kendiliğinden kapalı kalır
 from modules import yol_hafizasi as YOLH     # yol hafızası: benzer işlerde izlenen yolu hatırlar
-from modules import fenix_bilgi as FBILGI   # kendini tanı: FENIX kendisi hakkında gerçek bilgileri buradan okur
+from modules import fenix_bilgi as FBILGI
+from modules import guncelleme as GUNC        # yeni sürüm bildirimi (resmi depodaki Releases)   # kendini tanı: FENIX kendisi hakkında gerçek bilgileri buradan okur
 MCPX.install()
 
 try:                                   # sürükle-bırak (pip install tkinterdnd2); yoksa sadece 📎 butonu
@@ -203,6 +204,12 @@ class SettingsWindow(ReadOnlyWindow):
         if user_settings.get("cevap_bildirimi", True):
             self.sw_bildirim.select()
         self.sw_bildirim.pack(anchor="w", pady=(6, 0))
+        self.sw_gunc = ctk.CTkSwitch(row2, text="⬆️ Yeni FENIX sürümü çıkınca bildir (GitHub'dan 6 saatte bir denetler)",
+                                     command=lambda: user_settings.set("guncelleme_denetle", bool(self.sw_gunc.get())),
+                                     font=("Segoe UI", 12), text_color=TEXT)
+        if user_settings.get("guncelleme_denetle", True):
+            self.sw_gunc.select()
+        self.sw_gunc.pack(anchor="w", pady=(6, 0))
 
     def _on_lang(self, name):
         code = self._codes[[i18n.LANGS[c] for c in self._codes].index(name)]
@@ -1301,7 +1308,8 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                            command_cfg=cfg.get("komut_hafizasi") or {})
         self._attachments = []          # gönderilmeyi bekleyen ekli dosyalar
         self.after(400, self.memory.start_semantic)    # anlamsal hafıza pencere açıldıktan sonra arka planda yüklenir
-        self.after(3000, YOLH.arka_planda_tara)        # proje klasörleri (içinde .git olanlar) günde bir taranır
+        self.after(3000, YOLH.arka_planda_tara)
+        GUNC.arka_planda(lambda bilgi: self.ui_queue.put(("guncelleme", bilgi)))     # yeni sürüm var mı (6 sa'de bir)        # proje klasörleri (içinde .git olanlar) günde bir taranır
         # eklentiler (MCP) pencere açıldıktan sonra arka planda başlar; hazır olunca durum satırında kısa not
         self.after(1500, lambda: MCPX.baslat(cfg, bildir=lambda t: self.after(0, lambda: self._flash_status(t, 5000))))
         if OGR:
@@ -2350,6 +2358,8 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                                   nobet.quiet_now(self._nobet_cfg.get("sessiz_saat"))):
                 voice = self.cfg["audio"].get("tts_voice", "tr-TR-AhmetNeural")
                 threading.Thread(target=lambda: audio_io.speak(ev["kisa"], voice), daemon=True).start()
+        elif kind == "guncelleme":
+            self._guncelleme_goster(data)
         elif kind == "answer":
             sid, text = data[0], data[1]
             sure = data[2] if len(data) > 2 else None
@@ -3075,6 +3085,47 @@ class FenixApp(ctk.CTk, *_DND_BASES):
     def _show_skills(self):
         self._open_window("skills", lambda: ReadOnlyWindow(self, "Yetenekler", self._skills_text,
                                                            size="560x600"))
+
+    def _guncelleme_goster(self, bilgi):
+        """Yeni sürüm bildirimi: sohbetin üstünde küçük, kapatılabilir bir bant. Hiçbir şey indirilmez; düğme yalnızca
+        resmi sürüm sayfasını açar."""
+        try:
+            if getattr(self, "_gunc_bant", None) is not None and self._gunc_bant.winfo_exists():
+                self._gunc_bant.destroy()
+            bant = ctk.CTkFrame(self.chat, fg_color="#0f3b2e", corner_radius=8, border_width=1, border_color="#22c55e")
+            metin = (f"🔔 Yeni sürüm: FENIX {bilgi['surum']} çıktı (sende {FENIX_VERSION})"
+                     + (f"\n{bilgi['ozet']}" if bilgi.get("ozet") else ""))
+
+            def kapat():
+                try:
+                    bant.destroy()
+                except Exception:
+                    pass
+
+            def sayfa():
+                if GUNC.guvenli_adres(bilgi.get("sayfa")):
+                    import webbrowser
+                    webbrowser.open(bilgi["sayfa"])
+                kapat()
+
+            def atla():
+                GUNC.atla(bilgi["etiket"])
+                kapat()
+            dugmeler = ctk.CTkFrame(bant, fg_color="transparent")       # düğmeler önce yerleşir, metin kalan alana
+            dugmeler.pack(side="right", padx=(0, 6), pady=6)
+            for yazi, fn, renk in (("✕", kapat, PANEL2), ("Atla", atla, PANEL2), ("Neler yeni", sayfa, "#16a34a")):
+                ctk.CTkButton(dugmeler, text=yazi, command=fn, fg_color=renk, hover_color=CYAN, text_color=TEXT,
+                              width=30 if yazi == "✕" else 86, height=28).pack(side="right", padx=(4, 0))
+            ctk.CTkLabel(bant, text=metin, text_color=TEXT, font=("Segoe UI", 12), justify="left", anchor="w",
+                         wraplength=max(200, int(self.chat.winfo_width() or 600) - 300)).pack(
+                side="left", fill="x", expand=True, padx=(10, 6), pady=6)
+            bant.place(relx=0.01, rely=0.01, relwidth=0.98)
+            self._gunc_bant = bant
+            if not self._window_in_front() and user_settings.get("cevap_bildirimi", True):
+                notifier.show_toast_async(i18n.tr("FENIX güncellemesi"),
+                                          f"FENIX {bilgi['surum']} çıktı (sende {FENIX_VERSION}).")
+        except Exception as e:
+            self._record_error("güncelleme bildirimi", e)
 
     def _notify_answer(self, text):
         """Kullanıcı başka bir penceredeyken (tarayıcı vb.) cevap gelirse sağ altta Windows bildirimi gösterir."""

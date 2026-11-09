@@ -178,7 +178,8 @@ def _arayuz():
             f"{str(nb.get('yan_sohbet_kisayol', 'ctrl+alt+j')).title()}.",
             f"Acil kapatma: {str(ks.get('hotkey', 'ctrl+alt+q')).title()}"
             + (" ya da fareyi sol üst köşede bekletmek" if ks.get("corner_trigger") else "") + ".",
-            "Başka penceredeyken cevap gelirse bildirim gösterir. Spotlight: ekranda bir bölgeyi işaretleyip gösterir."]
+            "Yeni FENIX sürümü çıkınca sohbetin üstünde küçük bir bildirim gösterir (resmi depodan 6 saatte bir denetler, "
+            "hiçbir şeyi kendiliğinden indirmez). Başka penceredeyken cevap gelirse bildirim gösterir. Spotlight: ekranda bir bölgeyi işaretleyip gösterir."]
 
 
 def _guvenlik():
