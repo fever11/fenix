@@ -121,8 +121,11 @@ def tahmin(tur):
 
 def sinir(tur, mode_key=None):
     """Bu iş en fazla ne kadar sürebilir (sn): tahmine göre esner, türün tavanını geçmez."""
-    tavan = TURLER.get(tur, TURLER["sohbet"])[2] * (DEVIL_CARPANI if mode_key == "devil" else 1)
-    return int(min(tavan, max(EN_KISA_SINIR, tahmin(tur) * CARPAN)))
+    _, varsayilan, tavan = TURLER.get(tur, TURLER["sohbet"])
+    tavan *= (DEVIL_CARPANI if mode_key == "devil" else 1)
+    # Öğrenme sınırı sadece UZATIR, varsayılanın altına indirmez. 13.11: birkaç hızlı aramadan sonra 'güncel bilgi'
+    # ortalaması ~4 sn'ye düştü, sınır 90 sn'ye indi; Groq dakika sınırına takılan bir arama o yüzden kesildi.
+    return int(min(tavan, max(EN_KISA_SINIR, varsayilan * CARPAN, tahmin(tur) * CARPAN)))
 
 
 def sure_metni(sn):

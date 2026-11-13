@@ -1299,6 +1299,10 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                              groq_fallbacks=cfg.get("groq_fallbacks"))
         self._cancel_event = threading.Event()
         self.llm.iptal = self._cancel_event.is_set      # 'Görevi durdur' model beklemesini de anında keser
+        self.llm.not_yaz = lambda metin: self.ui_queue.put(("pipeline_note", metin))
+        self.llm.tur_degisti = self._is_turu_yukselt
+        self._aktif_plan = None
+        self._gorev_islemleri = []
         self.session_id = None          # açık sohbet (ilk mesajda oluşturulur)
         self.agent = Agent(self.llm, self.memory,
                            on_stage=lambda name: self.ui_queue.put(("stage", name)),
@@ -2667,6 +2671,26 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         except Exception as e:
             print(f"[HAFIZA UYARI] {role} mesajı kaydedilemedi: {e}")
 
+    def _is_turu_yukselt(self, tur):
+        """İş beklenenden ağır çıktı (13.11: 'sohbet' sanılan hava sorusu aramaya döndü, sohbetin 90 sn'lik sınırına
+        takıldı). Daha ağır türe geçilir, süre sınırı uzar; ölçüm de o türe yazılır. Hafifletme yapılmaz."""
+        plan = self._aktif_plan
+        if plan and tur == "tam":
+            # Hafif yol yetmedi, tam yola geçildi: henüz ne iş olduğu belli değil (13.11: İspanyolca çeviri
+            # 'Güncel bilgi' diye etiketlenmişti). Etiket değişmez, sadece süre bir aramaya yetecek kadar uzar.
+            if self.llm.son_tarih:
+                self.llm.son_tarih = max(self.llm.son_tarih, plan["t0"] + SURE.sinir("guncel", self.mode_key))
+            return
+        if not plan or tur not in SURE.TURLER or SURE.TURLER[tur][1] <= SURE.TURLER[plan["tur"]][1]:
+            return
+        yeni = SURE.plan("", self.mode_key, tur)
+        plan.update(tur=yeni["tur"], etiket=yeni["etiket"], tahmin=yeni["tahmin"], sinir=yeni["sinir"])
+        if self.llm.son_tarih:
+            self.llm.son_tarih = max(self.llm.son_tarih, plan["t0"] + yeni["sinir"])
+        self.ui_queue.put(("pipeline_note", f"iş türü değişti: {yeni['etiket']} · tahmini "
+                                            f"~{SURE.sure_metni(yeni['tahmin'])} · en fazla "
+                                            f"{SURE.sure_metni(yeni['sinir'])}"))
+
     def _pipe_not(self, metin):
         """Soldaki işlem günlüğüne bir satır (sohbete yazılmaz)."""
         try:
@@ -2699,9 +2723,13 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             ok = True
             speak_text = None
             t0 = time.time()
+            plan["t0"] = t0
+            self._aktif_plan = plan
             butce = plan["sinir"]
             self.llm.yavaslik = []
             self._onay_bekleme = 0.0
+            self.llm.eklenen_sure = 0.0
+            self._gorev_islemleri = []
             self.llm.son_tarih = t0 + butce
             bitti = threading.Event()
 
@@ -2719,10 +2747,18 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             except SureDoldu:
                 ok = False
                 sebep = "; ".join(self.llm.yavaslik) or "model servisleri çok yavaş cevap veriyor"
-                answer = (f"Bu tür işler ({plan['etiket'].lower()}) genelde ~{SURE.sure_metni(plan['tahmin'])} sürüyor; "
-                          f"{SURE.sure_metni(butce)} içinde bitmediği için durdum. Sebep: {sebep}. "
-                          "Biraz sonra tekrar dener misin? (Kota dolduysa ertesi gün sıfırlanır.)")
-                self._record_error("süre aşımı", f"{butce} sn doldu; {sebep}")
+                yapilan = list(dict.fromkeys(self._gorev_islemleri))[-5:]
+                # 13.11: şiir masaüstüne kaydedildi ama son cevap yazılırken süre doldu; kullanıcı sadece "durdum"
+                # gördü ve işin yapılmadığını sandı. Yapılan işlemler söylenir.
+                if yapilan:
+                    answer = ("Şunları yaptım: " + "; ".join(yapilan) + ". Ama işi bitirip cevabımı yazmadan süre "
+                              f"doldu ({SURE.sure_metni(plan['sinir'])}). Sebep: {sebep}. Bu adımları tekrar istemene "
+                              "gerek yok; eksik kalan bir şey varsa sadece onu söyle.")
+                else:
+                    answer = (f"Bu tür işler ({plan['etiket'].lower()}) genelde ~{SURE.sure_metni(plan['tahmin'])} "
+                              f"sürüyor; {SURE.sure_metni(plan['sinir'])} içinde bitmediği için durdum. Sebep: {sebep}. "
+                              "Biraz sonra tekrar dener misin? (Kota dolduysa ertesi gün sıfırlanır.)")
+                self._record_error("süre aşımı", f"{plan['sinir']} sn doldu ({plan['tur']}); {sebep}")
             except GorevIptal:
                 ok = False
                 answer = "Görevi durdurdum."
@@ -2732,6 +2768,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                 answer = "Bir hata ile karşılaştım. Ayrıntıyı Geçmiş'teki notlara kaydettim."
             finally:
                 self.llm.son_tarih = None
+                self._aktif_plan = None
                 bitti.set()
             if ok and not self._cancel_event.is_set() and not str(answer).startswith("Başlamadan sorayım"):
                 # (mod önerisi sorusu işin kendisi değildir; ortalamayı kısaltmasın)
@@ -2854,6 +2891,10 @@ class FenixApp(ctk.CTk, *_DND_BASES):
     def _on_action_notify(self, text):
         """functions.py bir işlem yaptığında: pipeline günlüğüne yaz + Geçmiş'e olay olarak kaydet."""
         self.ui_queue.put(("pipeline_note", text))
+        try:
+            self._gorev_islemleri.append(str(text))      # süre dolarsa kullanıcıya ne yapıldığı söylenir
+        except Exception:
+            pass
         try:
             self.memory.log_event("action", text)
         except Exception as e:

@@ -1,5 +1,35 @@
 # Changelog / Değişiklik günlüğü
 
+## 1.2.4 — hazırlanıyor
+- **TR:** Hafif yol: basit sohbet ve hesap sorularında ("selam", "%25 indirim kaç TL", "bir şiir yaz") modele kısa bir
+  talimat gider ve araç tanımları gönderilmez (~10.400 yerine ~2.000 karakter). Groq'un ücretsiz katmanında dakikada
+  8.000 token sınırı var; tam talimatla ardı ardına iki basit soru bile "dakikalık sınır"a takılıyordu (13.11 testi).
+  Dosya, uygulama, hatırlatma, ekran, güncel bilgi ve FENIX'in kendisiyle ilgili sorular eskisi gibi tam yoldan
+  gider; FENIX'in bir önceki cevabı bir teklifse ("…açayım mı?") ya da cevap "evet" ise de tam yol seçilir.
+  Güvenlik ağı: kısa talimat bir soruya yetmezse model cevap yazmak yerine bunu bildirir ve soru otomatik olarak tam
+  talimat ve araçlarla yeniden sorulur. Hangi yolun kullanıldığı soldaki işlem günlüğünde görünür ("hafif yol" /
+  "hafif yol yetmedi → tam talimat…").
+- **TR:** İş türü yükselmesi: "sohbet" sanılan bir iş aramaya ya da dosya işine dönerse süre sınırı o türe göre uzar
+  ve günlükte "iş türü değişti" yazar; ölçüm de doğru türe kaydedilir. 13.11 testinde "Bu akşam Ankara'da yağmur var
+  mı?" sohbet sayıldı, 90 sn'de kesildi. Hafif yolun yetmediği bir soru yedek modelde yeniden hafif yoldan denenmez.
+  "Yağmur/kar/yağış var mı" gibi sorular baştan güncel bilgi sayılır.
+- **TR:** Süre ayarları (13.11 ikinci deneme): öğrenilen ortalama sınırı yalnızca uzatır, varsayılanın altına indirmez
+  (hızlı aramalardan sonra 'güncel bilgi' sınırı 90 sn'ye inmiş, kotaya takılan arama kesilmişti). Groq dakika
+  sınırı beklemeleri ve yavaş yedek modele geçiş süreye eklenir (görev başına en fazla 2 dk). Tam yola geçiş iş türü
+  etiketini değiştirmez (çeviri "Güncel bilgi" görünüyordu); "aynısını İspanyolcaya çevir" gibi takip istekleri hafif
+  yolda kalır.
+- **TR:** Süre dolduğunda o ana kadar yapılan işlemler söylenir ("Şunları yaptım: Dosya yazıldı: …\siir.txt"); 13.11'de
+  şiir kaydedilmişti ama cevap sadece "durdum" diyordu ve kullanıcı işin yapılmadığını sanıyordu.
+- **TR:** Dakikalık sınır: art arda sorularda gpt-oss-120b Groq'un dakikalık sınırına takılınca 40 sn beklenip yavaş
+  NVIDIA modeline geçiliyordu; oysa gpt-oss-20b'nin kendi dakika kotası boştu. Artık hemen sıradaki Groq modeline
+  geçilir (soru sırasında bilgisayarda bir işlem yapılmadıysa; yapıldıysa iş baştan tekrarlanmasın diye geçilmez).
+  Dakika kotası dolan model bir dakika boyunca sona alınır. Günlükte "sıradaki Groq modeline geçiliyor" görünür.
+- **TR:** "Bu akşam Ankara'da yağmur var mı?" sohbet sanılıp 90 sn süre almış, aramayla birlikte süre yetmemişti
+  (13.11). Yağmur/kar/yağış/fırtına/hava durumu soruları artık güncel bilgi sayılır; hafif yoldan tam yola geçilen
+  işlerde süre en az 150 sn'ye uzatılır.
+- **EN:** Simple chat and calculation questions use a short, tool-less prompt to stay under Groq's per-minute token
+  limit.
+
 ## 1.2.3 — 2026-11-13
 - **TR:** Önceki cevap gelmeden yazılan mesaj artık sıraya alınır ve sırayla cevaplanır; bu bilgi sohbete değil,
   soldaki işlem günlüğüne yazılır. Önceden aynı anda ikinci bir görev başlıyordu: cevaplar yanlış soruların altına

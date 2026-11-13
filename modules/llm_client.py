@@ -254,6 +254,34 @@ def build_system_instruction(mode_key, mode_cfg):
     return base + "\n\n" + i18n.reply_rule()
 
 
+def build_light_instruction(mode_key):
+    """Basit sohbet ve hesap soruları için KISA sistem talimatı (araçsız). 13.11 testi: Groq ücretsiz katmanında
+    dakikada 8.000 token sınırı var; tam talimat (~10 bin karakter) + araç tanımları yüzünden ardı ardına iki basit
+    soru bile 'dakikalık sınır'a takılıyordu. Bu talimat tam talimatın ~1/4'ü kadardır."""
+    from .version import VERSION
+    return (
+        f"KİMLİK: Sen FENIX v{VERSION}'sün: kullanıcının kendi bilgisayarında çalışan, Mustafa Koç'un geliştirdiği "
+        "Türkçe öncelikli masaüstü asistanı. Dil modeli olarak Groq üzerindeki açık kaynak gpt-oss modellerini "
+        "(yedek: NVIDIA) kullanırsın; bir şirketin bulut ürünü değilsin.\n"
+        + imza.identity_text() + "\n"
+        "Doğal ve net konuş, 'efendim' gibi hitaplar kullanma. Cevaplar sesli de okunur: markdown işaretleri, tablo ve "
+        "LaTeX kullanma, düz yaz; hesapları kısa, adım adım ve düz metinle göster.\n"
+        "HAFIZA: '[İlgili geçmiş bağlam]' başlığıyla verilenler bu sohbetin son mesajları ve kalıcı hafızandır; "
+        "'hafızam yok' deme. Oradaki istekler eskidir, yeniden yapma. Kısa takip sorularını önceki konuya bağla.\n"
+        "DOĞRULUK: Yanlış bir şeyi onaylatmaya çalışılırsa uyma, doğrusunu söyle. Bildiğinle tahminini ayır. "
+        "Övgüyle başlama.\n"
+        "ZAMAN: Mesajın başındaki '[Şu an: ...]' satırı güncel tarih/saattir; cevaba kopyalama.\n"
+        "TAM YOL: Bu kısa talimatla sadece sohbet, genel bilgi, yazma/çeviri ve eldeki sayılarla hesap cevaplanır; "
+        "araçların yok. Soru bunların dışında bir şey gerektiriyorsa (güncel/değişebilen bilgi: fiyat, kur, hava, "
+        "haber, sonuçlar; internette arama; dosya, uygulama, hatırlatma ya da bilgisayar işlemi; ekrana bakma; "
+        "FENIX'in kendi özellikleri, modları, ayarları hakkında ayrıntı) ya da emin değilsen cevap YAZMA, sadece "
+        "[TAM_YOL] yaz. Sistem o zaman tam talimat ve araçlarla yeniden sorar. Bir işlem yaptığını ASLA söyleme. "
+        "Önceki mesajlara dayanan takip istekleri ('aynı cümleyi İspanyolcaya çevir', 'daha kısa yap', 'ikincisini "
+        "anlat') sohbettir: geçmiş bağlama bakıp cevapla, bunlar için [TAM_YOL] yazma.\n"
+        + i18n.reply_rule()
+    )
+
+
 class GeminiUnavailable(Exception):
     """Denenen bütün Gemini modelleri/anahtarları kullanılamadı. summary: her model için Türkçe durum."""
     def __init__(self, summary, last=None):
@@ -362,6 +390,9 @@ class LLMClient:
         self.iptal = lambda: False  # uygulama 'Görevi durdur' olayını bağlar
         self.son_tarih = None    # görevin süre bütçesinin bittiği an (time.time()); None = sınırsız (13.11)
         self.yavaslik = []       # bu görevde yaşanan yavaşlık sebepleri (kota doldu, yedek modele geçildi...)
+        self.not_yaz = lambda metin: None   # uygulama soldaki işlem günlüğüne bağlar
+        self.tur_degisti = lambda tur: None  # iş beklenenden ağır çıkınca (arama, dosya...) uygulama süreyi uzatır
+        self._hafif_red = None               # hafif yolun yetmediği istek (yedek modelde tekrar denenmez)
         self._recent_tools = {}  # mode_key -> son istekte kullanılan araç adları
         self.last_calls = []     # son ask() sırasında çalışan araçlar: [(ad, argümanlar, sonuç)] (komut hafızası öğrenir)
         fx.set_vision_handler(self.describe_image)
@@ -408,6 +439,20 @@ class LLMClient:
             return varsayilan
         return max(3.0, min(varsayilan, st - time.time()))
 
+    _EK_SURE_EN_FAZLA = 120     # bir görevde kota beklemeleri için eklenebilecek en fazla süre (sn)
+
+    def _sure_ekle(self, sn):
+        """Dakikalık kota beklemesi işin kendi süresi değildir: bekleme kadar süre eklenir (görev başına en fazla
+        2 dk; 15 dakikalık 'selam' bir daha olmasın)."""
+        st = getattr(self, "son_tarih", None)
+        if not st:
+            return
+        toplam = getattr(self, "eklenen_sure", 0.0)       # uygulama her görevin başında sıfırlar
+        ek = max(0.0, min(float(sn), self._EK_SURE_EN_FAZLA - toplam))
+        if ek:
+            self.son_tarih = st + ek
+            self.eklenen_sure = toplam + ek
+
     def yavaslik_notu(self, metin):
         try:
             if metin not in self.yavaslik:
@@ -452,8 +497,9 @@ class LLMClient:
         else:
             url = "https://api.groq.com/openai/v1/chat/completions"
             headers = {"Authorization": f"Bearer {self.groq_api_key}", "Content-Type": "application/json"}
+        if endpoint != "nvidia":
+            max_wait = min(max_wait, getattr(self, "_dk_bekleme_siniri", None) or max_wait)
         for attempt in range(4):
-            self._iptal_kontrol()
             self._iptal_kontrol()
             sure = self._kalan_sure(timeout)
             r = self._iptalli(lambda: requests.post(url, headers=headers, json=payload, timeout=sure))
@@ -466,9 +512,10 @@ class LLMClient:
                 except Exception:
                     wait = 2 ** attempt * 3
                 if wait > max_wait:
-                    break
+                    break                        # uzun bekleme: üst katman başka modele geçer
                 self.yavaslik_notu("Groq dakikalık sınırına takıldı, beklendi")
                 print(f"[GROQ] hız sınırı, {wait:.0f} sn bekleniyor...")
+                self._sure_ekle(wait)
                 self._uyu(wait)
                 continue
             r.raise_for_status()
@@ -618,6 +665,56 @@ class LLMClient:
             names -= {"run_command"}
         return names & self._allowed(mode_cfg)
 
+    _DEVAM_RE = re.compile(r"^\s*(evet|olur|tamam|yap|devam|hadi|tabi|ok|peki yap|aynen|onayla)\b", re.IGNORECASE)
+    _ISLEM_IZI_RE = re.compile(r"\b(aç|kapat|oluştur|sil|kaydet|ekle|oku|göster|bul|ara|indir|"
+                               r"kur|ayarla|hatırlat|çalıştır|gönder|listele|tara|bak)\b", re.IGNORECASE)
+
+    # Kullanılan araç işin gerçek türünü gösterir ("sohbet" sanılan iş aramaya dönüştüyse süre uzar)
+    _ARAC_TURU = {"search_web": "guncel", "read_webpage": "guncel", "write_file": "dosya", "edit_file": "dosya",
+                  "read_file": "dosya", "find_files": "dosya", "list_folder": "dosya", "fenix_hakkinda": "sohbet"}
+
+    _ARAC_KONU_RE = re.compile(
+        r"unut|hafızandan|hafizandan|ekran|\bses\b|\bsesi|\bkıs\b|sessiz|parlaklı|wi-?fi|bluetooth|medya|müzik|şarkı|"
+        r"pencere|kilitle|uyku|virüs|güvenlik|süreç|başlangıç|dosya|klasör|masaüst|uygulama|program|\.(txt|docx?|pdf|"
+        r"py|js|html|md|csv|xlsx?)\b|link|site|http|www\.|sesli|ses hız|ses ton", re.IGNORECASE)
+
+    def _hafif_mi(self, mode_key, user_text, hist=None):
+        """Araçsız, kısa talimatla cevaplanabilecek basit bir sohbet/hesap sorusu mu? Şüphede tam yol seçilir."""
+        if mode_key == "ogrenme" or getattr(self, "_extra_tools", None):
+            return False
+        if self._hafif_red and self._hafif_red == (getattr(self, "_simdiki_istek", "") or user_text):
+            # 13.11: hafif yol yetmeyince Groq dakika sınırına takıldı, yedek modelde aynı soru YİNE hafif yoldan
+            # denendi. Bu istek için hafif yol bir daha denenmez.
+            return False
+        t = (getattr(self, "_simdiki_istek", "") or user_text or "").strip()
+        if not t or len(t) > 400 or "[Ekli dosyalar" in (user_text or "") or "[Ekranın" in (user_text or ""):
+            return False
+        try:
+            from .is_suresi import tur_bul
+            if tur_bul(t, mode_key) not in ("sohbet", "hesap"):
+                return False
+        except Exception:
+            return False
+        if self._DEVAM_RE.search(t) or self._ISLEM_IZI_RE.search(t) or self._guncel_mi():
+            return False
+        if self._ARAC_KONU_RE.search(t):
+            return False                                       # bir aracı çağrıştırıyor (ör. 'bunu unut', 'ekranda ne var')
+        try:
+            from .agent import KENDISI_RE, KENDI_DOGRUDAN_RE
+            if KENDISI_RE.search(t) or KENDI_DOGRUDAN_RE.search(t):
+                return False                                   # kendini anlatma: fenix_hakkinda aracı gerekir
+        except Exception:
+            pass
+        # Bir önceki cevap soru sorduysa ya da bir şey teklif ettiyse ("…açayım mı?") cevap bir devam olabilir
+        for m in reversed((hist or [])[:-1]):
+            if m.get("role") == "assistant" and isinstance(m.get("content"), str):
+                son = m["content"].rstrip()[-200:]
+                if son.endswith("?") and (self._ISLEM_IZI_RE.search(son) or
+                                          re.search(r"(ayım|eyim|yayım|yeyim|alım|elim) m[ıiuü]\b", son)):
+                    return False
+                break
+        return True
+
     _TEKRAR_RE = re.compile(
         r"(az önce|biraz önce|önceki|bir önceki|son) (cevab|yanıt|söyledi|yazdı|gördü|anlattı)|tekrar (söyle|et|yaz)|"
         r"tek cümle(de|yle) (tekrar|özetle)|ingilizce(ye)? (tekrar|çevir)|türkçe(ye)? (tekrar|çevir)", re.IGNORECASE)
@@ -743,14 +840,23 @@ class LLMClient:
                                                   f"{out[i].get('content') or ''}")
                     break
             return out
-        selected = self._select_tools(mode_key, mode_cfg, user_text)
-        tools = self._groq_tools(mode_cfg, only=selected)
+        hafif = self._hafif_mi(mode_key, user_text, hist)
+        if hafif:
+            # Basit sohbet/hesap: kısa talimat, araç yok (dakikalık token sınırına takılmasın; cevap da hızlanır)
+            tools = []
+            system = {"role": "system", "content": build_light_instruction(mode_key)}
+            print("[GROQ] hafif istek: kısa talimat, araçsız")
+            self.not_yaz("hafif yol: kısa talimat, araçsız (basit soru)")
+        else:
+            selected = self._select_tools(mode_key, mode_cfg, user_text)
+            tools = self._groq_tools(mode_cfg, only=selected)
+            system = {"role": "system", "content": build_system_instruction(mode_key, mode_cfg)}
         used = set()
-        system = {"role": "system", "content": build_system_instruction(mode_key, mode_cfg)}
         ep = mode_cfg.get("_endpoint", "groq")
         try:
             tur = getattr(self, "tur_siniri", None) or (12 if mode_key == "devil" else 8 if mode_key == "ogrenme" else 6)
             engellendi = False
+            ilk_tur = 0                 # tam yolun ilk turu (hafif yoldan geçilirse kayar)
             for tur_no in range(tur):   # araç turu sınırı (Devil: derin araştırma)
                 self._iptal_kontrol()
                 payload = {"model": mode_cfg["groq_model"], "messages": [system] + with_ctx(self._trim_hist(hist)),
@@ -774,12 +880,12 @@ class LLMClient:
                 if tools:
                     payload["tools"] = tools
                     payload["tool_choice"] = "auto"
-                    if tur_no == 0 and self._TEKRAR_RE.search(getattr(self, "_simdiki_istek", "") or ""):
+                    if tur_no == ilk_tur and self._TEKRAR_RE.search(getattr(self, "_simdiki_istek", "") or ""):
                         # "Az önce ekranda gördüğünü tekrar söyle": cevap sohbette var. 07.11 testinde model alakasız
                         # bir web araştırmasına daldı (2 dk). İlk adımda araç verilmez.
                         payload.pop("tools", None)
                         payload.pop("tool_choice", None)
-                    elif tur_no == 0 and not engellendi and self._guncel_mi() and any(
+                    elif tur_no == ilk_tur and not engellendi and self._guncel_mi() and any(
                             t.get("function", {}).get("name") == "search_web" for t in tools):
                         # 07.11 testi: "2026 Dünya Kupası'nı kim kazandı?" sorusuna aramadan "henüz oynanmadı" dedi.
                         # Güncel bilgi isteyen sorularda ilk adım mutlaka web araması olur.
@@ -837,6 +943,22 @@ class LLMClient:
                     print("[GROQ] adı olmayan araç çağrısı atıldı")
                     if not (msg.get("content") or "").strip():
                         return "İsteği bir araca çeviremedim, bir daha dener misin?"
+                if hafif and "[TAM_YOL]" in (msg.get("content") or "") or hafif and calls:
+                    # Kısa talimat bu soru için yetmedi (model kendisi söyledi): tam talimat ve araçlarla yeniden sor.
+                    # Kısaltma yüzünden gereken bir kural ya da araç kaybolmasın diye güvenlik ağı (13.11).
+                    hafif = False
+                    self._hafif_red = getattr(self, "_simdiki_istek", "") or user_text
+                    self.tur_degisti("tam")               # süre uzar; tür etiketi asıl kullanılan araca göre değişir
+                    selected = self._select_tools(mode_key, mode_cfg, user_text)
+                    tools = self._groq_tools(mode_cfg, only=selected)
+                    system = {"role": "system", "content": build_system_instruction(mode_key, mode_cfg)}
+                    print("[GROQ] hafif yol yetmedi, tam yola geçiliyor")
+                    self.not_yaz("hafif yol yetmedi → tam talimat ve araçlarla yeniden soruluyor")
+                    if getattr(self, "son_tarih", None):
+                        # 13.11: iş 'sohbet' sanılıp 90 sn süre almıştı; tam yol (arama vb.) daha uzun sürebilir
+                        self.son_tarih = max(self.son_tarih, time.time() + 150)
+                    ilk_tur = tur_no + 1
+                    continue
                 entry = {"role": "assistant", "content": strip_time_stamp(msg.get("content") or "")}
                 if calls:
                     entry["tool_calls"] = calls
@@ -850,6 +972,7 @@ class LLMClient:
                     name = call["function"]["name"]
                     used.add(name)
                     self._recent_tools[mode_key] = set(used)
+                    self.tur_degisti(self._ARAC_TURU.get(name, "bilgisayar"))
                     try:
                         args = json.loads(call["function"].get("arguments") or "{}")
                     except Exception:
@@ -1052,7 +1175,8 @@ class LLMClient:
         r"çıktı mı|yayınlandı mı|ne zaman çıkacak|vefat|öldü mü|hayatta mı|"
         # 13.11 testi: "Bugün Bartın'da hava nasıl?" aramadan cevaplandı (Kasım'da 25 °C uydurdu); "öne çıkan bir
         # haber" de aranmadı.
-        r"\bhava(lar)? (nasıl|ne durumda|kaç derece|sıcak mı|soğuk mu|yağışlı mı)|yağmur yağacak|kar yağacak|"
+        r"\bhava(lar)? (nasıl|ne durumda|kaç derece|sıcak mı|soğuk mu|yağışlı mı)|yağmur|yağış|kar yağ|\bkar var|"
+        r"fırtına|hava durumu|şemsiye al|"
         r"kaç derece olacak|sıcaklık kaç|\bhaber(i|ler)?\b|gündem", re.IGNORECASE)
 
     def _guncel_mi(self):
@@ -1219,6 +1343,7 @@ class LLMClient:
         """NVIDIA modellerini sırayla dener (OpenAI uyumlu, araç çağırmalı)."""
         last = None
         self.yavaslik_notu("yedek NVIDIA modeline geçildi (ücretsiz katmanı yavaş)")
+        self._sure_ekle(60)          # yedek model yavaş: ek süre (kota beklemeleriyle birlikte en fazla 2 dk)
         for nm in self._nvidia_models():
             try:
                 out = self._groq_agent_chat(mode_key, dict(mode_cfg, groq_model=nm, _endpoint="nvidia"),
@@ -1251,19 +1376,38 @@ class LLMClient:
         fallbacks = getattr(self, "groq_fallbacks", ["openai/gpt-oss-20b"])
         cooldown = self.__dict__.setdefault("_groq_cooldown", {})
         models = [m for m in [first] + [x for x in fallbacks if x != first] if m]
+        dk_cooldown = self.__dict__.setdefault("_groq_dk_cooldown", {})
         notes = []
-        for gm in models:
+        denenen = set()
+        # Dakikalık sınırı yeni dolan modeller sona alınır (her modelin ayrı dakika kotası var)
+        sirali = sorted(models, key=lambda m: dk_cooldown.get(m, 0) > time.time())
+        for gm in sirali:
             until, when = cooldown.get(gm, (0, ""))
             if until > time.time():
                 self.yavaslik_notu(f"Groq {gm.split('/')[-1]} günlük kotası dolu ({when}'e kadar)")
                 notes.append(f"{gm}: günlük sınır dolu ({when}'e kadar)")
                 continue
+            # 13.11 testi: art arda sorularda 120b dakikalık sınıra takılınca 40 sn beklenip yavaş NVIDIA'ya
+            # geçiliyordu; 20b'nin kendi dakika kotası boştu. Sırada başka Groq modeli varsa kısa beklenir, geçilir.
+            denenen.add(gm)
+            sonraki_var = any(m not in denenen and cooldown.get(m, (0, ""))[0] <= time.time() for m in sirali)
+            self._dk_bekleme_siniri = 5 if sonraki_var else None
+            islem_once = fx.ISLEM_SAYACI[0]
             try:
                 out = self._groq_agent_chat(mode_key, dict(mode_cfg, groq_model=gm), user_text, memory_context)
                 if gm != first:
                     fx._notify(f"Groq yedek model kullanıldı: {gm}")
+                    self.not_yaz(f"Groq yedek modeli kullanıldı: {gm.split('/')[-1]}")
                 return out
             except Exception as e:
+                kod = getattr(getattr(e, "response", None), "status_code", 0)
+                if (kod == 429 and _groq_reason(e) != "Groq günlük sınırı doldu" and sonraki_var
+                        and fx.ISLEM_SAYACI[0] == islem_once):
+                    # Dakikalık sınır: (henüz bir işlem yapılmadıysa) sıradaki Groq modeliyle hemen devam
+                    dk_cooldown[gm] = time.time() + 60
+                    self.yavaslik_notu(f"Groq {gm.split('/')[-1]} dakikalık sınırı doldu, yedek Groq modeline geçildi")
+                    self.not_yaz(f"{gm.split('/')[-1]} dakikalık sınırda → sıradaki Groq modeline geçiliyor")
+                    continue
                 if _groq_reason(e) != "Groq günlük sınırı doldu":
                     raise
                 body = getattr(getattr(e, "response", None), "text", "") or ""
@@ -1273,6 +1417,8 @@ class LLMClient:
                 self.yavaslik_notu(f"Groq {gm.split('/')[-1]} günlük kotası doldu ({when}'e kadar)")
                 notes.append(f"{gm}: günlük sınır doldu ({when}'e kadar)")
                 fx.report_error("Groq", f"{gm}: günlük sınır doldu, {when}'e kadar atlanıyor; yedek modele geçiliyor")
+            finally:
+                self._dk_bekleme_siniri = None
         raise GroqLimit("Groq günlük sınırı doldu (" + "; ".join(notes) + ")")
 
     def _gemini_after_groq(self, groq_error, gemini_call):

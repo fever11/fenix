@@ -213,6 +213,8 @@ def test_eski_sohbetteki_istek_yeni_soruda_tekrarlanmaz(monkeypatch, ayar):
                                  "arguments": "{\"path\": \"FENIX_Kapsamli_Tanitim.docx\", \"content\": \"# x\"}"}}]}}]}
         return {"choices": [{"message": {"content": "Bugün Cumartesi, saat 15:45."}}]}
     monkeypatch.setattr(llm, "_groq_post", sahte)
+    # Kalkan tam yolun (araçlı) testidir; bu basit soru normalde araçsız hafif yoldan gider (13.11).
+    monkeypatch.setattr(llm, "_hafif_mi", lambda *a, **k: False)
     llm._simdiki_istek = "Merhaba, bugün hangi gün ve saat kaç?"
     cevap = llm._groq_agent_chat("normal", dict(ayar["modes"]["normal"], allow_actions=True), llm._simdiki_istek,
                                  memory_context="user: Masaüstüne FENIX_Kapsamli_Tanitim.docx oluştur")
