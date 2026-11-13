@@ -1,5 +1,20 @@
 # Changelog / Değişiklik günlüğü
 
+## 1.2.3 — 2026-11-13
+- **TR:** Önceki cevap gelmeden yazılan mesaj artık sıraya alınır ve sırayla cevaplanır; bu bilgi sohbete değil,
+  soldaki işlem günlüğüne yazılır. Önceden aynı anda ikinci bir görev başlıyordu: cevaplar yanlış soruların altına
+  düşüyor, iki görev aynı kotayı tüketip ikisi de yavaşlıyordu (13.11 testi). "Durdur" sıradakileri de iptal eder.
+- **TR:** İş türüne göre süre (Mustafa'nın fikri): FENIX isteğin türünü bulur (sohbet, hesap, güncel bilgi,
+  bilgisayar işi, dosya, kod, belge, araştırma) ve o tür işlerin bu bilgisayarda gerçekte ne kadar sürdüğünü öğrenir
+  (son 30 işin ortancası, `data/is_sureleri.json`). Günlükte "iş türü · tahmini süre · en fazla" görünür. Tahminin
+  2 katı geçilince sebep yazılır (ör. "Groq günlük kotası doldu"). Üst sınır tahmine göre esner ve türün tavanını
+  geçmez (sohbet 2 dk … araştırma 15 dk, Devil'de 1,5 katı); onay kutusunda geçen süre sayılmaz. Önceden kota dolunca
+  basit bir "selam" 15 dk sürebiliyordu.
+- **TR:** Hava durumu ve haber soruları her zaman önce internette aranır (testte Kasım için 25 °C uydurmuştu).
+  Eldeki sayılarla yapılan hesaplar ("%18 indirim kaç TL olur") artık 'kaç TL' yüzünden internette aranmaz.
+- **EN:** Messages sent while a task runs are queued (shown in the side log). Time estimates per task type, learned
+  from this computer's real durations, replace a fixed limit; weather/news always search, plain calculations don't.
+
 ## 1.2.2 — 2026-11-09
 - **TR:** Güncelleme bildirimi: FENIX resmi depodaki (github.com/fever11/fenix) en son sürümü arka planda denetler
   (açılıştan 20 sn sonra, sonra 6 saatte bir). Senin sürümün eskiyse sohbetin üstünde küçük bir bant çıkar:

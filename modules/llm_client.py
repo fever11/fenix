@@ -24,6 +24,12 @@ from . import functions as fx
 class GorevIptal(BaseException):
     """Kullanıcı 'Görevi durdur'a bastı. BaseException: ara katmanlardaki 'except Exception' yedek-model
     zincirleri bunu yakalayıp başka modele geçmesin, görev hemen dursun (07.11)."""
+
+
+class SureDoldu(GorevIptal):
+    """Görevin süre bütçesi doldu (13.11). Bir arkadaşın 'selam' mesajına 15 dk sonra cevap geldi: Groq kotası
+    dolunca yedek modeller tek tek ve uzun zaman aşımlarıyla deneniyordu. Artık görev belli bir sürede biter ve
+    kullanıcıya nedeni söylenir. GorevIptal'den türer: yedek-model zincirleri bunu yakalayıp devam etmez."""
 from . import imza
 from . import i18n
 
@@ -354,6 +360,8 @@ class LLMClient:
         self._gorulen = {}        # kaynak -> gördüğü son kayıt numarası
         self._son_kaynak = None   # son cevabı üreten yol (kendi geçmişinde zaten var)
         self.iptal = lambda: False  # uygulama 'Görevi durdur' olayını bağlar
+        self.son_tarih = None    # görevin süre bütçesinin bittiği an (time.time()); None = sınırsız (13.11)
+        self.yavaslik = []       # bu görevde yaşanan yavaşlık sebepleri (kota doldu, yedek modele geçildi...)
         self._recent_tools = {}  # mode_key -> son istekte kullanılan araç adları
         self.last_calls = []     # son ask() sırasında çalışan araçlar: [(ad, argümanlar, sonuç)] (komut hafızası öğrenir)
         fx.set_vision_handler(self.describe_image)
@@ -387,6 +395,23 @@ class LLMClient:
                 raise GorevIptal()
         except GorevIptal:
             raise
+        except Exception:
+            pass
+        st = getattr(self, "son_tarih", None)
+        if st and time.time() > st:
+            raise SureDoldu()
+
+    def _kalan_sure(self, varsayilan):
+        """Ağ isteğinin zaman aşımı: görevin kalan süresinden uzun olamaz."""
+        st = getattr(self, "son_tarih", None)
+        if not st:
+            return varsayilan
+        return max(3.0, min(varsayilan, st - time.time()))
+
+    def yavaslik_notu(self, metin):
+        try:
+            if metin not in self.yavaslik:
+                self.yavaslik.append(metin)
         except Exception:
             pass
 
@@ -429,7 +454,9 @@ class LLMClient:
             headers = {"Authorization": f"Bearer {self.groq_api_key}", "Content-Type": "application/json"}
         for attempt in range(4):
             self._iptal_kontrol()
-            r = self._iptalli(lambda: requests.post(url, headers=headers, json=payload, timeout=timeout))
+            self._iptal_kontrol()
+            sure = self._kalan_sure(timeout)
+            r = self._iptalli(lambda: requests.post(url, headers=headers, json=payload, timeout=sure))
             if r.status_code == 429 and attempt < 3:
                 low = (r.text or "")[:600].lower()
                 if "per day" in low or "tpd" in low or "rpd" in low:
@@ -440,6 +467,7 @@ class LLMClient:
                     wait = 2 ** attempt * 3
                 if wait > max_wait:
                     break
+                self.yavaslik_notu("Groq dakikalık sınırına takıldı, beklendi")
                 print(f"[GROQ] hız sınırı, {wait:.0f} sn bekleniyor...")
                 self._uyu(wait)
                 continue
@@ -1021,11 +1049,26 @@ class LLMClient:
         r"şu an(ki|da)? (fiyat|kur|durum|başkan|lider)|bugün(kü)? (haber|maç|fiyat|kur|hava)|haberler|son dakika|"
         r"fiyatı ne|kaç (tl|lira|dolar|euro)|dolar kuru|euro kuru|borsa|hava durumu|seçim(i|in)? (kim|sonuç)|"
         r"kim oldu|kimdir|başkanı kim|ceo'?su kim|yeni çıkan|son sürüm(ü)?|en son (sürüm|model|çıkan)|"
-        r"çıktı mı|yayınlandı mı|ne zaman çıkacak|vefat|öldü mü|hayatta mı", re.IGNORECASE)
+        r"çıktı mı|yayınlandı mı|ne zaman çıkacak|vefat|öldü mü|hayatta mı|"
+        # 13.11 testi: "Bugün Bartın'da hava nasıl?" aramadan cevaplandı (Kasım'da 25 °C uydurdu); "öne çıkan bir
+        # haber" de aranmadı.
+        r"\bhava(lar)? (nasıl|ne durumda|kaç derece|sıcak mı|soğuk mu|yağışlı mı)|yağmur yağacak|kar yağacak|"
+        r"kaç derece olacak|sıcaklık kaç|\bhaber(i|ler)?\b|gündem", re.IGNORECASE)
 
     def _guncel_mi(self):
         """Soru güncel/değişebilen bir bilgi mi istiyor? (Ham kullanıcı metnine bakılır, zaman damgasına değil.)"""
-        return bool(self._GUNCEL_RE.search(getattr(self, "_simdiki_istek", "") or ""))
+        t = getattr(self, "_simdiki_istek", "") or ""
+        if not self._GUNCEL_RE.search(t):
+            return False
+        # 13.11 testi: "1250 TL'lik ürüne %18 indirim yapılırsa kaç TL olur?" sorusu 'kaç TL' yüzünden internette
+        # arandı (1 dk 47 sn). Eldeki sayılarla yapılan hesaplar aranmaz; "1 euro kaç TL" gibi kur soruları aranır.
+        try:
+            from .is_suresi import hesap_mi
+            if hesap_mi(t):
+                return False
+        except Exception:
+            pass
+        return True
 
     _ONAY_RE = re.compile(r"\s*(evet|olur|tamam|onayla|ok|okey|tabii|tabi|yap|yapabilirsin|devam)\b", re.IGNORECASE)
     _HEDEF_ARGLAR = ("path", "file_path", "filename", "folder", "target", "name", "app_name")
@@ -1175,6 +1218,7 @@ class LLMClient:
     def _nvidia_with_fallback(self, mode_key, mode_cfg, user_text, memory_context=""):
         """NVIDIA modellerini sırayla dener (OpenAI uyumlu, araç çağırmalı)."""
         last = None
+        self.yavaslik_notu("yedek NVIDIA modeline geçildi (ücretsiz katmanı yavaş)")
         for nm in self._nvidia_models():
             try:
                 out = self._groq_agent_chat(mode_key, dict(mode_cfg, groq_model=nm, _endpoint="nvidia"),
@@ -1211,6 +1255,7 @@ class LLMClient:
         for gm in models:
             until, when = cooldown.get(gm, (0, ""))
             if until > time.time():
+                self.yavaslik_notu(f"Groq {gm.split('/')[-1]} günlük kotası dolu ({when}'e kadar)")
                 notes.append(f"{gm}: günlük sınır dolu ({when}'e kadar)")
                 continue
             try:
@@ -1225,6 +1270,7 @@ class LLMClient:
                 secs = _groq_retry_seconds(body)
                 when = f"{_dt.datetime.now() + _dt.timedelta(seconds=secs):%H:%M}"
                 cooldown[gm] = (time.time() + secs, when)
+                self.yavaslik_notu(f"Groq {gm.split('/')[-1]} günlük kotası doldu ({when}'e kadar)")
                 notes.append(f"{gm}: günlük sınır doldu ({when}'e kadar)")
                 fx.report_error("Groq", f"{gm}: günlük sınır doldu, {when}'e kadar atlanıyor; yedek modele geçiliyor")
         raise GroqLimit("Groq günlük sınırı doldu (" + "; ".join(notes) + ")")

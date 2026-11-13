@@ -26,7 +26,7 @@ import customtkinter as ctk
 from modules.audio_io import PushToTalkRecorder, speak, stop_speaking, is_speaking, list_input_devices, MicError
 from modules import stt
 from modules.memory import Memory
-from modules.llm_client import LLMClient, GorevIptal
+from modules.llm_client import LLMClient, GorevIptal, SureDoldu
 from modules.killswitch import KillSwitch
 from modules.agent import Agent
 from modules import functions as fx
@@ -53,7 +53,8 @@ except ImportError:
 from modules import mcp_eklenti as MCPX     # eklentiler (MCP); 'mcp' paketi yoksa kendiliğinden kapalı kalır
 from modules import yol_hafizasi as YOLH     # yol hafızası: benzer işlerde izlenen yolu hatırlar
 from modules import fenix_bilgi as FBILGI
-from modules import guncelleme as GUNC        # yeni sürüm bildirimi (resmi depodaki Releases)   # kendini tanı: FENIX kendisi hakkında gerçek bilgileri buradan okur
+from modules import guncelleme as GUNC
+from modules import is_suresi as SURE        # yeni sürüm bildirimi (resmi depodaki Releases)   # kendini tanı: FENIX kendisi hakkında gerçek bilgileri buradan okur
 MCPX.install()
 
 try:                                   # sürükle-bırak (pip install tkinterdnd2); yoksa sadece 📎 butonu
@@ -1307,6 +1308,12 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                            research_cfg=dict(cfg.get("deep_research") or {}, documents=cfg.get("documents") or {}),
                            command_cfg=cfg.get("komut_hafizasi") or {})
         self._attachments = []          # gönderilmeyi bekleyen ekli dosyalar
+        # 13.11 testi: önceki cevap gelmeden yazılan mesaj AYNI ANDA ikinci bir görev başlatıyordu; cevaplar karışık
+        # sırayla ve yanlış soruların altına düşüyor, iki görev aynı kotayı tüketip ikisi de yavaşlıyordu.
+        # Artık bir görev sürerken gelen mesajlar sıraya alınır ve sırayla cevaplanır.
+        self._gorev_calisiyor = False
+        self._sira = []                 # [(metin, ekler, sıraya giriş zamanı)]
+        self._onay_bekleme = 0.0        # bu görevde onay kutusunda geçen süre (iş süresine sayılmaz)
         self.after(400, self.memory.start_semantic)    # anlamsal hafıza pencere açıldıktan sonra arka planda yüklenir
         self.after(3000, YOLH.arka_planda_tara)
         GUNC.arka_planda(lambda bilgi: self.ui_queue.put(("guncelleme", bilgi)))     # yeni sürüm var mı (6 sa'de bir)        # proje klasörleri (içinde .git olanlar) günde bir taranır
@@ -1968,7 +1975,12 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self._pipe_render()
 
     def _cancel_task(self):
-        """Görevi durdurur: derin araştırma bir sonraki adımda, model beklemeleri yarım saniye içinde kesilir."""
+        """Görevi durdurur: derin araştırma bir sonraki adımda, model beklemeleri yarım saniye içinde kesilir.
+        Sırada bekleyen mesajlar da iptal edilir (kullanıcı 'dur' dedi)."""
+        if self._sira:
+            n = len(self._sira)
+            self._sira.clear()
+            self._pipe_not(f"sırada bekleyen {n} mesaj da iptal edildi")
         self._cancel_event.set()
         self.pipe_stage.configure(text="Durduruluyor...", text_color=AMBER)
         self._set_stop_enabled(False)
@@ -1983,6 +1995,10 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         p["active"] = False
         p["gen"] += 1
         cancelled = self._cancel_event.is_set()
+        self._gorev_calisiyor = False
+        if self._sira and not cancelled:
+            metin, ekler, giris = self._sira.pop(0)
+            self.after(150, lambda: self._baslat(metin, ekler, sirada=time.time() - giris))
         if ok and not cancelled:
             p["idx"] = len(p["steps"])       # hepsi ✓
             self._pipe_render()
@@ -2651,13 +2667,31 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         except Exception as e:
             print(f"[HAFIZA UYARI] {role} mesajı kaydedilemedi: {e}")
 
-    def _run_task(self, fn, user_text=None, session_id=None):
+    def _pipe_not(self, metin):
+        """Soldaki işlem günlüğüne bir satır (sohbete yazılmaz)."""
+        try:
+            self.pipe_log.insert("end", f"• {metin}\n")
+            self.pipe_log.see("end")
+        except Exception:
+            pass
+
+    def _run_task(self, fn, user_text=None, session_id=None, tur=None, sirada=None):
         """
         Bir görevi worker thread'de çalıştırır. Başarılı da olsa hata da verse
         sonunda MUTLAKA 'finish' sinyali gönderir; böylece pipeline takılı kalmaz.
         """
         self._cancel_event.clear()
+        self._gorev_calisiyor = True
         self._on_plan(["İşleniyor"])      # her görev paneli sıfırlar; ajan kendi adım planını sonra gönderir
+        # İş türüne göre süre (13.11, Mustafa): sabit sınır yerine o tür işin bu bilgisayardaki ortalama süresi
+        try:
+            plan = SURE.plan(user_text or "", self.mode_key, tur)
+        except Exception:
+            plan = {"tur": "sohbet", "etiket": "Sohbet", "tahmin": 10, "sinir": 120}
+        if sirada is not None:
+            self._pipe_not(f"sıradan alındı ({SURE.sure_metni(sirada)} bekledi)")
+        self._pipe_not(f"iş türü: {plan['etiket']} · tahmini ~{SURE.sure_metni(plan['tahmin'])} · "
+                       f"en fazla {SURE.sure_metni(plan['sinir'])}")
         self.ui_queue.put(("orb", "thinking"))
         self.ui_queue.put(("status", "Düşünüyorum..."))
 
@@ -2665,10 +2699,30 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             ok = True
             speak_text = None
             t0 = time.time()
+            butce = plan["sinir"]
+            self.llm.yavaslik = []
+            self._onay_bekleme = 0.0
+            self.llm.son_tarih = t0 + butce
+            bitti = threading.Event()
+
+            def gozcu():
+                # Tahminin 2 katını geçince sebebi soldaki günlüğe yazar (kota doldu, yedek modele geçildi...)
+                if not bitti.wait(max(15.0, plan["tahmin"] * 2)):
+                    sebep = "; ".join(self.llm.yavaslik) or "model servisleri yavaş cevap veriyor"
+                    self.ui_queue.put(("pipeline_note", f"beklenenden uzun sürüyor (bu tür iş genelde "
+                                                        f"~{SURE.sure_metni(plan['tahmin'])}): {sebep}"))
+            threading.Thread(target=gozcu, daemon=True).start()
             try:
                 if user_text:
                     self._remember("user", user_text, session_id)   # ağ çağrısı içerir: worker'da
                 answer = fn()
+            except SureDoldu:
+                ok = False
+                sebep = "; ".join(self.llm.yavaslik) or "model servisleri çok yavaş cevap veriyor"
+                answer = (f"Bu tür işler ({plan['etiket'].lower()}) genelde ~{SURE.sure_metni(plan['tahmin'])} sürüyor; "
+                          f"{SURE.sure_metni(butce)} içinde bitmediği için durdum. Sebep: {sebep}. "
+                          "Biraz sonra tekrar dener misin? (Kota dolduysa ertesi gün sıfırlanır.)")
+                self._record_error("süre aşımı", f"{butce} sn doldu; {sebep}")
             except GorevIptal:
                 ok = False
                 answer = "Görevi durdurdum."
@@ -2676,6 +2730,12 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                 ok = False
                 self._record_error("görev", f"{type(e).__name__}: {e}")
                 answer = "Bir hata ile karşılaştım. Ayrıntıyı Geçmiş'teki notlara kaydettim."
+            finally:
+                self.llm.son_tarih = None
+                bitti.set()
+            if ok and not self._cancel_event.is_set() and not str(answer).startswith("Başlamadan sorayım"):
+                # (mod önerisi sorusu işin kendisi değildir; ortalamayı kısaltmasın)
+                SURE.kaydet(plan["tur"], time.time() - t0 - self._onay_bekleme)   # türün ortalaması öğrenilir
             if isinstance(answer, dict):           # derin araştırma: özet + ayrı rapor
                 speak_text = answer.get("speak")
                 if answer.get("report"):
@@ -2698,10 +2758,19 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         threading.Thread(target=worker, daemon=True).start()
 
     def _process_input(self, text):
+        """Kullanıcı mesajı. Bir görev sürüyorsa sıraya alınır; önceki bitince sırayla cevaplanır."""
+        atts = self._take_attachments()          # ekler bu mesaja bağlanır (sırada beklerken değişmesin)
+        if self._gorev_calisiyor:
+            self._sira.append((text, atts, time.time()))
+            self._pipe_not(f"önceki iş sürüyor; yeni mesaj sıraya alındı (sırada {len(self._sira)})")
+            return
+        self._baslat(text, atts)
+
+    def _baslat(self, text, atts, sirada=None):
         stop_speaking()      # yeni komut geldi: eski cevabı okumayı bırak
         # Mod önerisine "evet" dendiyse: önerilen moda geç, asıl isteği orada yeniden çalıştır (v1.2.1)
         try:
-            gecis = self.agent.mod_gecisi(text) if not self._attachments else None
+            gecis = self.agent.mod_gecisi(text) if not atts else None
         except Exception:
             gecis = None
         if gecis and gecis["mod"] in self.cfg.get("modes", {}):
@@ -2711,7 +2780,6 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             self._append_chat("sys", f"{etiket} moduna geçtim: {gecis['sebep']}. İsteğini bu modda yeniden "
                                      "çalıştırıyorum.")
             text = gecis["metin"]
-        atts = self._take_attachments()          # bekleyen ekler bu komutla gider (yazılı ya da sesli)
         names = ", ".join(a["name"] for a in atts)
         if atts:
             self._append_chat("sys", "📎 " + "  •  ".join(att.label(a) for a in atts))
@@ -2722,7 +2790,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         sid = self._ensure_session()
         self._run_task(lambda: (OGR.handle_and_learn(self, text, mode_key, mode_cfg, atts) if OGR else
                                 self.agent.handle(text, mode_key, mode_cfg, attachments=atts or None)),
-                       user_text=memo, session_id=sid)
+                       user_text=memo, session_id=sid, sirada=sirada)
 
     def run_day_summary(self, day, session_id=None):
         """Geçmiş penceresindeki 'Günü özetle' düğmesi (session_id verilirse o sohbetin o günü)."""
@@ -2734,7 +2802,7 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self._append_chat("sys", f"{what} özetleniyor...")
         self._pipe["task"] = f"{what} özeti"
         self._run_task(lambda: self.agent.summarize_day(day, mode_key, mode_cfg, session_id=session_id,
-                                                        session_title=title))
+                                                        session_title=title), tur="belge")
 
     def _record_error(self, where, detail):
         """Hatayı sesli okumadan Geçmiş'e not düşer (her thread'den çağrılabilir)."""
@@ -2844,7 +2912,11 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self._confirm_result["value"] = False
         self.ui_queue.put(("waiting", None))
         self.ui_queue.put(("confirm_show", (title, message, detail)))
+        t_onay = time.time()
         answered = self._confirm_event.wait(timeout=120)   # 2 dk içinde karar yoksa reddet
+        if getattr(self.llm, "son_tarih", None):
+            self.llm.son_tarih += time.time() - t_onay       # kullanıcının düşündüğü süre görev süresinden sayılmaz
+        self._onay_bekleme += time.time() - t_onay
         if not answered:
             self.ui_queue.put(("chat", ("sys", "Onay zaman aşımına uğradı, işlem yapılmadı.")))
             self.ui_queue.put(("hide_confirm", None))
