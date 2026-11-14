@@ -872,15 +872,35 @@ def delete_file(path: str, reason: str = ""):
             info = f"Dosya: {fx._fmt_size(os.path.getsize(target))}"
         except OSError:
             info = "Dosya"
-    if not fx._confirm("Geri Dönüşüm Kutusu'na taşınacak", f"'{os.path.basename(target)}' silinsin mi?",
+    from . import islem_defteri as DEF
+    if not fx._confirm("Silinecek (geri alınabilir)", f"'{os.path.basename(target)}' silinsin mi?",
                        f"Yol: {target}\n{info}\nNeden: {reason or 'kullanıcı isteği'}\n\n"
-                       "Kalıcı silinmez; Geri Dönüşüm Kutusu'ndan geri alınabilir."):
+                       f"Kalıcı silinmez: {DEF.SAKLAMA_GUN} gün FENIX çöp kutusunda durur, \"geri al\" deyince "
+                       "yerine döner."):
         return {"status": "cancelled", "message": "Silmedim."}
+    try:
+        cop = DEF.cope_tasi(target)
+    except Exception as e:
+        cop = None
+        fx.report_error("dosya silme", f"{target}: çöpe taşınamadı ({e}); Geri Dönüşüm Kutusu deneniyor")
+        if not os.path.exists(target):          # taşıma yarıda kaldıysa ikinci kez denenmez
+            return {"status": "error", "message": "Silme yarıda kaldı; dosyanın yerini kontrol et."}
+    if cop:
+        DEF.kaydet("silme", f"{os.path.basename(target)} ({os.path.dirname(target)})", target,
+                   {"islem": "copten_geri", "cop": cop, "yol": target})
+        fx._notify(f"Silindi (FENIX çöp kutusuna): {target}")
+        return {"status": "ok", "message": (f"'{os.path.basename(target)}' silindi. {DEF.SAKLAMA_GUN} gün FENIX çöp "
+                                           "kutusunda duracak; \"geri al\" dersen yerine dönerim."), "yol": target}
+    # Farklı sürücü (taşıma uzun bir kopyalama olurdu) ya da taşıma hatası: Geri Dönüşüm Kutusu
     if not _recycle(target, is_dir):
         fx.report_error("dosya silme", f"{target}: Geri Dönüşüm Kutusu'na taşınamadı")
         return {"status": "error", "message": "Silemedim; dosya başka bir program tarafından açık olabilir."}
+    DEF.kaydet("silme", f"{os.path.basename(target)} ({os.path.dirname(target)}) — Geri Dönüşüm Kutusu'nda", target,
+               None)
     fx._notify(f"Geri Dönüşüm Kutusu'na taşındı: {target}")
-    return {"status": "ok", "message": f"'{os.path.basename(target)}' Geri Dönüşüm Kutusu'na taşındı.", "yol": target}
+    return {"status": "ok", "message": (f"'{os.path.basename(target)}' Geri Dönüşüm Kutusu'na taşındı (başka bir "
+                                       "sürücüde olduğu için FENIX çöp kutusuna değil). Oradan geri alınabilir."),
+            "yol": target}
 
 
 # =====================================================================
@@ -1064,12 +1084,23 @@ def resolve_folder(name):
 # =====================================================================
 SCHEMAS = [
     {"name": "delete_file",
-     "description": ("Dosya ya da klasörü Geri Dönüşüm Kutusu'na taşır (kalıcı silmez). Kullanıcı 'şu dosyayı sil' "
-                     "dediğinde kullan; her seferinde onay kutusu çıkar. run_command ile Remove-Item KULLANMA."),
+     "description": ("Dosya ya da klasörü siler: FENIX çöp kutusuna taşır, 30 gün sonra kalıcı silinir; undo_action ile "
+                     "geri alınabilir. Kullanıcı 'şu dosyayı sil' dediğinde kullan; her seferinde onay kutusu çıkar. "
+                     "run_command ile Remove-Item KULLANMA."),
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string", "description": "Dosya/klasör yolu (ör. 'masaüstü/not.txt')"},
          "reason": {"type": "string", "description": "Neden silindiği (onay kutusunda gösterilir)"}},
          "required": ["path"]}},
+    {"name": "undo_action",
+     "description": ("FENIX'in yaptığı bir işlemi geri alır (silinen dosyayı yerine koyar, oluşturulan dosyayı kaldırır, "
+                     "düzenlenen dosyayı eski hâline döndürür, açılıştan kaldırılanı geri ekler). 'geri al', 'son "
+                     "yaptığını geri al' denince. id verilmezse geri alınabilir son işlem. Onay kutusu çıkar."),
+     "parameters": {"type": "object", "properties": {
+         "id": {"type": "string", "description": "İşlem defterindeki numara (action_log'dan); boşsa son işlem"}}}},
+    {"name": "action_log",
+     "description": ("İşlem defteri: FENIX'in bugün bilgisayarda yaptığı değişikliklerin listesi (dosya, silme, komut). "
+                     "'bugün ne yaptın', 'neleri değiştirdin' denince."),
+     "parameters": {"type": "object", "properties": {}}},
     {"name": "adjust_volume",
      "description": ("Bilgisayarın sesini göreli değiştirir ya da sessize alır. 'sesi aç/arttır/yükselt' = change +10, "
                      "'kıs/azalt/düşür' = -10, 'çok' ise ±25; kullanıcı sayı söylerse o kadar (ör. 20 arttır = +20). "
@@ -1142,10 +1173,24 @@ TOOLS = {
     "set_radio": set_radio, "close_app": close_app, "media_control": media_control, "power_action": power_action,
     "window_action": window_action, "scan_pc": scan_pc, "list_installed_apps": list_installed_apps,
     "close_front_app": close_front_app, "pc_awareness": pc_awareness,
+    "undo_action": lambda id="": _undo_action(id), "action_log": lambda: _action_log(),
 }
 
 # Güvenli modda da verilen (sisteme dokunmayan) araçlar
-READONLY = {"scan_pc", "list_installed_apps", "pc_awareness"}
+READONLY = {"scan_pc", "list_installed_apps", "pc_awareness", "action_log"}
+
+
+def _undo_action(id=""):
+    from . import islem_defteri as DEF
+    r = DEF.geri_al(id or None, onayla=fx._confirm)
+    if r.get("status") == "ok":
+        fx._notify(f"Geri alındı: {r.get('message')}")
+    return r
+
+
+def _action_log():
+    from . import islem_defteri as DEF
+    return {"status": "ok", "defter": DEF.ozet_metni()}
 
 
 def register():

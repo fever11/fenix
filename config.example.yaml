@@ -34,6 +34,24 @@ api_keys:
   # backup chat when Groq runs out + last-resort screen vision. https://build.nvidia.com/settings/api-keys
   nvidia: ""
 
+  # İSTEĞE BAĞLI / OPTIONAL — Groq dolunca NVIDIA'dan ÖNCE denenen hızlı yedekler (v1.4). Boş olan atlanır.
+  # fast backups tried BEFORE NVIDIA when Groq runs out. Empty ones are skipped.
+  # Cloudflare Workers AI (kart istemez, günde 10.000 nöron ≈ 50 soru, Groq'taki aynı gpt-oss-120b modeli)
+  # (no card, ~50 questions per day, same gpt-oss-120b model as Groq): dash.cloudflare.com -> Workers AI -> Use REST API
+  # Token izinleri / token permissions: Account -> Workers AI -> Read + Edit
+  cloudflare: ""
+  cloudflare_hesap: ""        # Account ID (dash.cloudflare.com/<BU KOD>/...)
+  # Cohere deneme anahtarı (ayda 1.000 istek, ticari kullanım yok / 1,000 calls per month, non-commercial):
+  #   https://dashboard.cohere.com/api-keys
+  cohere: ""
+  # Mistral (API için ücretli plan gerekir; Kasım 2026'da ücretsiz planda anahtarlar çalışmıyor
+  #   / API needs a paid plan, keys don't work on the free plan as of Nov 2026): https://console.mistral.ai/api-keys
+  mistral: ""
+  # SambaNova (ödeme yöntemi gerekir / needs a payment method, 14.11.2026): https://cloud.sambanova.ai/apis
+  sambanova: ""
+  # OpenRouter (':free' modeller, günde 50 istek / free models, 50 requests per day): https://openrouter.ai/keys
+  openrouter: ""
+
   # İSTEĞE BAĞLI / OPTIONAL — derin araştırmada daha iyi arama / better search for deep research
   # Boşsa DuckDuckGo/Bing denenir / falls back to DuckDuckGo/Bing.
   # https://app.tavily.com  |  https://api.search.brave.com
@@ -42,8 +60,8 @@ api_keys:
 
 # --- MODLAR / MODES --------------------------------------------------
 # provider: "groq" | "nvidia" | "gemini"
-# Sıra / order:  provider "groq"   -> Groq modelleri -> NVIDIA modelleri -> Gemini
-#                provider "nvidia" -> NVIDIA -> Groq -> Gemini
+# Sıra / order:  provider "groq"   -> Groq modelleri -> Mistral/SambaNova/OpenRouter (anahtar varsa) -> NVIDIA -> Gemini
+#                provider "nvidia" -> NVIDIA -> Groq -> Mistral/SambaNova/OpenRouter -> Gemini
 # Anahtarı olmayan sağlayıcı atlanır / providers without a key are skipped.
 # Ekran görme her zaman Gemini ile yapılır / screen vision always uses Gemini.
 modes:
@@ -79,6 +97,12 @@ groq_fallbacks:
   - "qwen/qwen3.8-27b"
 gemini_fallbacks:
   - "gemini-3.6-flash"
+
+# Hızlı ek yedekler (v1.4, yalnızca anahtarı girilenler / only those with a key). İsteğe bağlı ayar:
+# optional: order and models of the fast backups
+# yedekler:
+#   sira: [cloudflare, openrouter, cohere, mistral, sambanova]
+#   mistral: {modeller: ["mistral-small-latest"]}
 
 # NVIDIA (yalnızca api_keys.nvidia doluysa / only with an nvidia key)
 nvidia:

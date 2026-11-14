@@ -25,6 +25,14 @@ göndererek çalışır; bu servislerin kendi gizlilik politikaları geçerlidir
 | Google Gemini | Messages, attached files, screenshots, text for memory search (embeddings) / Mesajlar, eklenen dosyalar, ekran görüntüleri, hafıza araması için metin | Chat, "look at my screen", attachments, memory / Sohbet, ekran görme, ekler, hafıza |
 | Groq | Messages; voice recordings for speech recognition / Mesajlar; ses tanıma için ses kaydı | If a Groq key is set / Groq anahtarı varsa |
 | NVIDIA | Messages (backup chat), screenshots (last-resort vision) / Mesajlar (yedek sohbet), ekran görüntüsü (son yedek) | If an NVIDIA key is set / NVIDIA anahtarı varsa |
+| Cloudflare Workers AI | Messages (backup chat) / Mesajlar (yedek sohbet) | If a Cloudflare token is set / Cloudflare anahtarı varsa |
+| Open-Meteo | Only the city name you typed for the daily briefing / Sadece günlük brifing için yazdığın şehir adı | If the briefing shows weather / Brifingde hava açıksa |
+| Frankfurter | Nothing personal (currency codes only) / Kişisel bilgi yok (sadece döviz kodları) | If the briefing shows exchange rates / Brifingde kur açıksa |
+| Google News (RSS) | Nothing personal (public headline feed) / Kişisel bilgi yok (herkese açık başlık akışı) | If the briefing shows headlines / Brifingde haber açıksa |
+| Cohere | Messages (backup chat). Trial keys are for non-commercial use / Mesajlar (yedek sohbet). Deneme anahtarı ticari olmayan kullanım içindir | If a Cohere key is set / Cohere anahtarı varsa |
+| Mistral | Messages (backup chat). Data handling depends on your Mistral plan; check Mistral's terms / Mesajlar (yedek sohbet). Verilerin nasıl kullanıldığı Mistral planına bağlıdır; Mistral'ın koşullarına bak | If a Mistral key is set / Mistral anahtarı varsa |
+| SambaNova | Messages (backup chat) / Mesajlar (yedek sohbet) | If a SambaNova key is set / SambaNova anahtarı varsa |
+| OpenRouter | Messages (backup chat), forwarded to the provider of the chosen free model / Mesajlar (yedek sohbet), seçilen ücretsiz modelin sağlayıcısına iletilir | If an OpenRouter key is set / OpenRouter anahtarı varsa |
 | Google speech recognition | Voice recordings / Ses kaydı | If Groq is not used / Groq kullanılmıyorsa |
 | Microsoft Edge read-aloud (edge-tts) | Text that FENIX speaks / FENIX'in sesli okuduğu metin | Voice replies on / Sesli cevap açıksa |
 | GitHub (api.github.com) | Nothing personal: an anonymous request for the latest FENIX release number / Kişisel hiçbir şey: en son FENIX sürüm numarası için kimliksiz bir istek | At most every 6 hours; can be turned off in Settings / En fazla 6 saatte bir; Ayarlar'dan kapatılabilir |

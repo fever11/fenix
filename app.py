@@ -211,6 +211,43 @@ class SettingsWindow(ReadOnlyWindow):
         if user_settings.get("guncelleme_denetle", True):
             self.sw_gunc.select()
         self.sw_gunc.pack(anchor="w", pady=(6, 0))
+        # v1.4: sağ tık menüsü ve Numpad + kısayolu
+        from modules import sag_tik
+        self.sw_sagtik = ctk.CTkSwitch(row2, text="🖱️ Dosyalara sağ tıklayınca \"FENIX\" menüsü (Windows 11: Daha fazla "
+                                                  "seçenek göster)", command=self._on_sagtik,
+                                       font=("Segoe UI", 12), text_color=TEXT)
+        if sag_tik.kurulu_mu():
+            self.sw_sagtik.select()
+        self.sw_sagtik.pack(anchor="w", pady=(6, 0))
+        self.sw_numpad = ctk.CTkSwitch(row2, text="➕ Seçili metni FENIX'e gönder: sayı tuş takımında \"+\" tuşunu basılı "
+                                                  "tut (kısa basış \"+\" yazar)", command=self._on_numpad,
+                                       font=("Segoe UI", 12), text_color=TEXT)
+        if user_settings.get("numpad_arti", True):
+            self.sw_numpad.select()
+        self.sw_numpad.pack(anchor="w", pady=(6, 0))
+        ctk.CTkButton(row2, text="📋 Günlük brifing ayarları (hava, hatırlatmalar, kur, haber)",
+                      command=self._on_brifing, fg_color=PANEL2, hover_color=CYAN, text_color=TEXT, height=28,
+                      font=("Segoe UI", 12), anchor="w").pack(anchor="w", pady=(8, 0))
+
+    def _on_brifing(self):
+        from modules import brifing
+        brifing.ayar_penceresi(self, ctk, renk=self.app._accent())
+
+    def _on_sagtik(self):
+        from modules import sag_tik
+        from tkinter import messagebox
+        r = sag_tik.kur() if self.sw_sagtik.get() else sag_tik.kaldir()
+        if r.get("status") != "ok":
+            messagebox.showwarning("FENIX", r.get("message", "Yapılamadı."), parent=self)
+            self.sw_sagtik.deselect() if self.sw_sagtik.get() else self.sw_sagtik.select()
+
+    def _on_numpad(self):
+        acik = bool(self.sw_numpad.get())
+        user_settings.set("numpad_arti", acik)
+        try:
+            self.app._numpad_ayarla(acik)
+        except Exception as e:
+            print(f"[SAĞ TIK] {e}")
 
     def _on_lang(self, name):
         code = self._codes[[i18n.LANGS[c] for c in self._codes].index(name)]
@@ -1290,6 +1327,9 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         try:
             from modules import nvidia
             nvidia.configure(cfg)       # NVIDIA: sohbet yedeği (Groq'tan sonra) + görme son yedeği
+            from modules import yedekler
+            yedekler.configure(cfg)     # v1.4: Mistral / SambaNova / OpenRouter (anahtarı yazılanlar), NVIDIA'dan önce
+            print("[YEDEK] etkin hızlı yedekler: " + (", ".join(yedekler._SIRA) or "yok (config.yaml'da anahtar yok)"))
         except Exception:
             pass
         self._splash_step("Yapay zekâ bağlantıları hazırlanıyor", 0.35)
@@ -1320,6 +1360,20 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         self._onay_bekleme = 0.0        # bu görevde onay kutusunda geçen süre (iş süresine sayılmaz)
         self.after(400, self.memory.start_semantic)    # anlamsal hafıza pencere açıldıktan sonra arka planda yüklenir
         self.after(3000, YOLH.arka_planda_tara)
+        # FENIX çöp kutusu: süresi (30 gün) dolan, FENIX'in sildiği dosyalar kalıcı silinir (v1.4)
+        def _cop():
+            try:
+                from modules import islem_defteri
+                n = islem_defteri.cop_temizle()
+                if n:
+                    print(f"[DEFTER] süresi dolan {n} öğe çöp kutusundan kalıcı silindi")
+            except Exception as e:
+                print(f"[DEFTER] çöp temizlenemedi: {e}")
+        threading.Thread(target=_cop, daemon=True, name="cop_temizle").start()
+        self._numpad = None
+        if user_settings.get("numpad_arti", True):
+            self._numpad_ayarla(True)
+        self.after(2500, self._brifing_hazirla)
         GUNC.arka_planda(lambda bilgi: self.ui_queue.put(("guncelleme", bilgi)))     # yeni sürüm var mı (6 sa'de bir)        # proje klasörleri (içinde .git olanlar) günde bir taranır
         # eklentiler (MCP) pencere açıldıktan sonra arka planda başlar; hazır olunca durum satırında kısa not
         self.after(1500, lambda: MCPX.baslat(cfg, bildir=lambda t: self.after(0, lambda: self._flash_status(t, 5000))))
@@ -1437,7 +1491,23 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         bottom = ctk.CTkFrame(p, fg_color="transparent")
         bottom.pack(side="bottom", fill="x", pady=(4, 8))
         self.load_label = ctk.CTkLabel(bottom, text="", text_color=MUTED, font=("Consolas", 10))
-        self.load_label.pack(side="bottom", pady=(4, 0))
+        self.load_label.pack(side="bottom", pady=(2, 0))
+        # v1.4: küçük doluluk çubukları (CPU, RAM, C:); tıklayınca Sistem paneli açılır
+        self._mini = {}
+        mini = ctk.CTkFrame(bottom, fg_color="transparent")
+        mini.pack(side="bottom", fill="x", padx=14, pady=(4, 0))
+        for i, ad in enumerate(("CPU", "RAM", "Disk")):
+            ctk.CTkLabel(mini, text=ad, text_color=MUTED, font=("Consolas", 9), width=30, anchor="w").grid(
+                row=i, column=0, sticky="w")
+            pb = ctk.CTkProgressBar(mini, height=6, fg_color=PANEL2, progress_color=self._accent())
+            pb.set(0)
+            pb.grid(row=i, column=1, sticky="ew", padx=(2, 4))
+            lb = ctk.CTkLabel(mini, text="", text_color=MUTED, font=("Consolas", 9), width=34, anchor="e")
+            lb.grid(row=i, column=2, sticky="e")
+            self._mini[ad] = (pb, lb)
+            for w in (pb, lb):
+                w.bind("<Button-1>", lambda e: self._show_system())
+        mini.grid_columnconfigure(1, weight=1)
         self.tts_switch = ctk.CTkSwitch(bottom, text="Sesli cevap", command=self._toggle_tts,
                                         progress_color=self._accent(), font=("Segoe UI", 11))
         if self.tts_enabled:
@@ -1446,13 +1516,10 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         menu = ctk.CTkFrame(bottom, fg_color="transparent")
         menu.pack(side="bottom", fill="x", padx=10)
         menu.grid_columnconfigure((0, 1), weight=1)
-        items = [("📜 Geçmiş", self._show_history), ("📄 Raporlar", self._show_reports),
-                 ("⏰ Hatırlatma", self._show_reminders), ("🧠 Yetenekler", self._show_skills),
-                 ("🧩 Eklentiler", self._show_plugins),
-                 ("🎓 Öğrendiklerim", self._show_learned), ("📊 İstatistik", self._show_stats),
-                 *([("🧪 Oyun alanı", self._show_lab)] if OGR else []),
-                 ("🌙 Nöbete geç", self._go_nobet),
-                 ("⚙️ Ayarlar", self._show_settings)]
+        # v1.4: Geçmiş, Raporlar, İstatistik, Ayarlar, Eklentiler, Yetenekler, Öğrendiklerim Sistem panelinde
+        self._ogrenme_var = bool(OGR)
+        items = [("🖥️ Sistem", self._show_system), ("⏰ Hatırlatma", self._show_reminders),
+                 ("📜 Geçmiş", self._show_history), ("🌙 Nöbete geç", self._go_nobet)]
         for i, (text, cmd) in enumerate(items):
             ctk.CTkButton(menu, text=text, command=cmd, fg_color=PANEL2, hover_color=CYAN, text_color=TEXT,
                           height=28, font=("Segoe UI", 11), anchor="w").grid(
@@ -1498,6 +1565,11 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         accent, light, hover = self._accent(), self._accent_light(), self._accent_hover()
         _THEME.update(base=accent, hover=hover)
         try:
+            win = self._windows.get("system")
+            if win is not None and win.winfo_exists():
+                win.mod_rengi()               # Sistem paneli de moda göre renk alır (v1.4)
+            for pb, _ in getattr(self, "_mini", {}).values():
+                pb.configure(progress_color=accent)
             if hasattr(self, "brand_label"):
                 self.brand_label.configure(text_color=accent)
             if hasattr(self, "mode_seg"):
@@ -2326,7 +2398,17 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             title, message, detail = data
             self._show_confirm_box(title, message, detail)
         elif kind == "load":
-            self.load_label.configure(text=data)
+            if isinstance(data, dict):
+                self.load_label.configure(text=data.get("metin", ""))
+                for ad, yuzde in (data.get("cubuk") or {}).items():
+                    if ad in self._mini and yuzde is not None:
+                        pb, lb = self._mini[ad]
+                        pb.set(max(0.0, min(1.0, yuzde / 100)))
+                        pb.configure(progress_color="#f87171" if yuzde >= 90 else AMBER if yuzde >= 75
+                                     else self._accent())
+                        lb.configure(text=f"%{yuzde:.0f}")
+            else:
+                self.load_label.configure(text=data)
         elif kind == "process":
             self._process_input(data)
         elif kind == "hide_confirm":
@@ -2365,6 +2447,11 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                 daemon=True).start()
         elif kind == "gozcu_alert":
             ev = data
+            try:
+                from modules import sistem_bilgi
+                sistem_bilgi.olay_kaydet(ev)          # Sistem paneli > Güvenlik olayları
+            except Exception:
+                pass
             self._append_chat("sys", f"🛡 {ev['baslik']}\n{ev['metin']}")
             if (self.cfg.get("security") or {}).get("windows_notifications", True) and not self._window_in_front():
                 notifier.show_toast_async("FENIX · " + ev["baslik"], ev["kisa"])
@@ -2691,6 +2778,62 @@ class FenixApp(ctk.CTk, *_DND_BASES):
                                             f"~{SURE.sure_metni(yeni['tahmin'])} · en fazla "
                                             f"{SURE.sure_metni(yeni['sinir'])}"))
 
+    def _brifing_hazirla(self):
+        """Günlük brifing (v1.4): ilk kez açılıyorsa neler gösterileceğini sorar; günün ilk açılışında gösterir."""
+        from modules import brifing
+        try:
+            if not brifing.ayarlandi_mi():
+                brifing.ayar_penceresi(self, ctk, kaydedince=self._brifing_goster, renk=self._accent())
+            else:
+                self._brifing_goster()
+        except Exception as e:
+            print(f"[BRİFİNG] {e}")
+
+    def _brifing_goster(self):
+        from modules import brifing
+        if not brifing.gerekli_mi():
+            return
+        brifing.gosterildi()                      # iki kez gösterilmesin (ağ yavaşsa bile)
+
+        def is_():
+            try:
+                if brifing.ayarlar().get("icerik"):
+                    metin = brifing.olustur(self.reminders)
+                    self.ui_queue.put(("chat", ("fenix", metin)))
+            except Exception as e:
+                print(f"[BRİFİNG] oluşturulamadı: {e}")
+            self.after(0, self._brifing_ozel)
+        threading.Thread(target=is_, daemon=True, name="brifing").start()
+
+    def _brifing_ozel(self):
+        """Kullanıcının serbest yazdığı brifing konuları: yapay zekâ + arama ile, normal bir görev olarak (sıraya
+        girer; kullanıcı o arada yazarsa mesajı sıraya alınır)."""
+        from modules import brifing
+        istek = brifing.ozel_istek_metni()
+        if not istek:
+            return
+        mode_key = self.mode_key
+        mode_cfg = self.cfg["modes"][mode_key]
+        if self._gorev_calisiyor:
+            self._sira.append((istek, [], time.time()))
+            return
+        self._run_task(lambda: self.agent.handle(istek, mode_key, mode_cfg), user_text=None,
+                       session_id=self._ensure_session())
+
+    def _numpad_ayarla(self, acik):
+        """Seçili metin kısayolu (sayı tuş takımında + basılı tut) -> yan sohbet (v1.4)."""
+        from modules import sag_tik
+        if acik and not self._numpad:
+            try:
+                d = sag_tik.NumpadDinleyici()
+                if d.baslat():
+                    self._numpad = d
+            except Exception as e:
+                sag_tik._kayit(f"ana pencerede başlatılamadı: {type(e).__name__}: {e}")
+        elif not acik and self._numpad:
+            self._numpad.durdur()
+            self._numpad = None
+
     def _pipe_not(self, metin):
         """Soldaki işlem günlüğüne bir satır (sohbete yazılmaz)."""
         try:
@@ -2747,7 +2890,14 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             except SureDoldu:
                 ok = False
                 sebep = "; ".join(self.llm.yavaslik) or "model servisleri çok yavaş cevap veriyor"
-                yapilan = list(dict.fromkeys(self._gorev_islemleri))[-5:]
+                # 14.11: aramalar da "yaptım" listesine giriyordu ("Şunları yaptım: Aranıyor: …"). Artık sadece
+                # bilgisayarda gerçekten değişiklik yapan işlemler (işlem defteri) sayılır.
+                try:
+                    from modules import islem_defteri as DEF
+                    yapilan = [f"{DEF.TUR_ADI.get(k['tur'], k['tur'])}: {k['ozet']}" for k in DEF.oku()
+                               if k.get("zaman", 0) >= t0 - 1 and k.get("tur") != "geri_alma"][-5:]
+                except Exception:
+                    yapilan = []
                 # 13.11: şiir masaüstüne kaydedildi ama son cevap yazılırken süre doldu; kullanıcı sadece "durdum"
                 # gördü ve işin yapılmadığını sandı. Yapılan işlemler söylenir.
                 if yapilan:
@@ -2825,9 +2975,41 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         mode_cfg = self.cfg["modes"][mode_key]
         memo = text + (f"\n[Ekli dosyalar: {names}]" if atts else "")
         sid = self._ensure_session()
+        from modules import brifing
+        if not atts and brifing.KOMUT_RE.search(text or ""):     # "brifing", "günün özeti": yapay zekâsız (v1.4)
+            self._run_task(lambda: brifing.olustur(self.reminders), user_text=memo, session_id=sid, sirada=sirada)
+            self._brifing_ozel()
+            return
+        from modules import belge_yazici
+        if mode_key != "safe" and belge_yazici.istek_mi(text, atts):   # uzun ders notu: bölüm bölüm (v1.4)
+            self._run_task(lambda: self._belge_yaz(text, atts, mode_cfg), user_text=memo, session_id=sid,
+                           tur="belge", sirada=sirada)
+            return
         self._run_task(lambda: (OGR.handle_and_learn(self, text, mode_key, mode_cfg, atts) if OGR else
                                 self.agent.handle(text, mode_key, mode_cfg, attachments=atts or None)),
                        user_text=memo, session_id=sid, sirada=sirada)
+
+    def _belge_yaz(self, text, atts, mode_cfg):
+        """Kaynak miktarına göre uzayan ders notu / belge (modules/belge_yazici.py)."""
+        from modules import belge_yazici
+        kaynaklar = [{"ad": a["name"], "metin": a.get("text") or ""} for a in (atts or [])
+                     if a.get("kind") == "text" and (a.get("text") or "").strip()]
+
+        def ilerleme(m):
+            self.ui_queue.put(("pipeline_note", m))      # worker thread: arayüze kuyrukla
+            self.ui_queue.put(("status", m[:60]))
+            # Her adım kendi süresini alır: uzun belgede toplam süre bölüm sayısıyla büyür; sadece bir bölüm
+            # takılırsa (4 dk) durulur.
+            self.llm.son_tarih = max(self.llm.son_tarih or 0, time.time() + 240)
+        sonuc = belge_yazici.olustur(self.llm, mode_cfg, text, kaynaklar, ilerleme=ilerleme)
+        dosya = belge_yazici.hedef_dosya(text, sonuc["baslik"])
+        r = fx.write_file(dosya, sonuc["md"])
+        if r.get("status") != "ok":
+            return f"Belgeyi hazırladım ama kaydedemedim: {r.get('message') or r.get('status')}"
+        kaynak_notu = (f"{len(kaynaklar)} kaynağın tamamı ({sonuc['parca']} parça) bölümlere dağıtıldı"
+                       if kaynaklar else "kaynak verilmediği için kendi bilgimle yazdım (önemli yerleri kontrol et)")
+        return (f"“{sonuc['baslik']}” hazır: {sonuc['bolum']} bölüm + Kendini Dene ve Özet, {r.get('boyut', '')}. "
+                f"{kaynak_notu}. Kaydettiğim yer: {r['yol']}")
 
     def run_day_summary(self, day, session_id=None):
         """Geçmiş penceresindeki 'Günü özetle' düğmesi (session_id verilirse o sohbetin o günü)."""
@@ -3258,6 +3440,10 @@ class FenixApp(ctk.CTk, *_DND_BASES):
     def _show_plugins(self):
         return self._open_window("plugins", lambda: PluginsWindow(self))
 
+    def _show_system(self):
+        from modules.sistem_paneli import SistemPaneli
+        self._open_window("system", lambda: SistemPaneli(self))
+
     def _show_settings(self):
         self._open_window("settings", lambda: SettingsWindow(self, self._settings_text))
 
@@ -3369,7 +3555,16 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         def load_loop():
             while True:
                 load = self.stats.system_load()
-                self.ui_queue.put(("load", f"CPU {load.get('cpu')} • {load.get('ram_mb')}MB"))
+                cubuk = {}
+                try:
+                    import psutil
+                    cubuk["CPU"] = psutil.cpu_percent(interval=None)
+                    cubuk["RAM"] = psutil.virtual_memory().percent
+                    kok = os.path.splitdrive(os.path.abspath(os.sep))[0] + os.sep if os.name == "nt" else "/"
+                    cubuk["Disk"] = psutil.disk_usage(kok).percent
+                except Exception:
+                    pass
+                self.ui_queue.put(("load", {"metin": f"FENIX {load.get('ram_mb')} MB", "cubuk": cubuk}))
                 time.sleep(3)
 
         threading.Thread(target=load_loop, daemon=True).start()
@@ -3417,8 +3612,11 @@ class FenixApp(ctk.CTk, *_DND_BASES):
         choice = self._nobet_choice()
         if choice is None:
             return
+        self._numpad_ayarla(False)         # Numpad + kısayolunu Nöbet devralsın
         if choice == "nobet":
             if not nobet.start_background():
+                if user_settings.get("numpad_arti", True):
+                    self._numpad_ayarla(True)
                 self._append_chat("sys", "Nöbet modu başlatılamadı, FENIX açık kalıyor. Ayrıntı için data\\hatalar.log'a bak "
                                          "ya da 'pip install pystray' yaptığından emin ol.")
                 return
@@ -3430,9 +3628,12 @@ class FenixApp(ctk.CTk, *_DND_BASES):
             self._append_chat("sys", "Nöbet modu için Windows ve 'pystray' paketi gerekli. Terminalde "
                                      "'pip install pystray' yazıp FENIX'i yeniden başlat.")
             return
+        self._numpad_ayarla(False)
         if nobet.start_background():
             self._finish_close()
         else:
+            if user_settings.get("numpad_arti", True):
+                self._numpad_ayarla(True)
             self._append_chat("sys", "Nöbet modu başlatılamadı. Ayrıntı için data\\hatalar.log'a bak.")
 
 

@@ -551,6 +551,14 @@ class ProcessWatcher:
 
 
 # ---------------------------------------------------------------- gözcü (iş parçacıkları)
+def _numpad_acik():
+    try:
+        from . import user_settings
+        return bool(user_settings.get("numpad_arti", True))
+    except Exception:
+        return True
+
+
 def python_exe():
     exe = sys.executable
     if os.name == "nt":
@@ -919,6 +927,11 @@ def run():
 
     def on_event(ev):
         s = load_settings(cfg.get("nobet"))          # tepsiden değişen ses ayarı hemen geçerli olsun
+        try:
+            from . import sistem_bilgi
+            sistem_bilgi.olay_kaydet(ev)              # Sistem paneli > Güvenlik olayları (v1.4)
+        except Exception:
+            pass
         settings.update(s)
         from .i18n import tr as _t
         kisa = _t(ev["kisa"])
@@ -935,6 +948,19 @@ def run():
             keyboard.add_hotkey(settings["yan_sohbet_kisayol"], open_chat)
         except Exception as e:
             print(f"[NÖBET] yan sohbet kısayolu kurulamadı: {e}")
+    numpad = None
+    if chat_on and _numpad_acik():
+        from .sag_tik import NumpadDinleyici
+        numpad = NumpadDinleyici()
+
+        def _numpad_dene():
+            # Ana pencereden "Nöbete geç" denince ana pencere birkaç saniye daha açık kalır ve kısayolu o tutar;
+            # bırakınca Nöbet devralır.
+            for _ in range(120):
+                if numpad.baslat():
+                    return
+                time.sleep(5)
+        threading.Thread(target=_numpad_dene, daemon=True, name="numpad").start()
 
     def open_chat_item(icon, item):
         open_chat()

@@ -1,6 +1,73 @@
 # Changelog / Değişiklik günlüğü
 
-## 1.2.4 — hazırlanıyor
+## 1.4.0 — 2026-11-14
+- **TR:** Kaynağa göre uzayan ders notları (Mustafa'nın isteği: "çok kaynak verirsek çok uzun bir ders notu çıkmalı,
+  hiç eksik hissettirmemeli"). "Ders notu çıkar / kapsamlı not hazırla" istekleri bölüm bölüm yazılır: ekli kaynaklar
+  parçalara ayrılır, bölüm sayısı kaynak miktarına göre belirlenir (6-30), her kaynak parçası mutlaka bir bölüme
+  atanır (plan bir parçayı atlarsa kod ekler), her bölüm ayrı istekle sadece kendi kaynağıyla yazılır; sonda "Kendini
+  Dene" soruları, özet ve hangi kaynağın hangi bölümde kullanıldığı. İlerleme soldaki günlükte ("bölüm 3/12
+  yazılıyor"); süre bölüm başına verilir, sadece bir bölüm takılırsa durulur. Güvenli modda kapalı.
+- **TR:** Güzel belgeler (Mustafa'nın isteği; sabit şablon değil): model içeriğe göre yapıyı kendisi kurar, kod her
+  yapı taşını aynı kalitede çizer. Yapı taşları: tanım, örnek, ipucu, dikkat, özet, formül, soru–cevap, adım adım, not,
+  alıntı, doğrulanmamış bilgi kutuları (`::: tür başlık … :::`); konuya göre renk teması (`<!-- tema: yesil -->`);
+  renkli kapak, uzun belgede içindekiler, renkli tablo başlıkları, sayfa numarası. PDF'te Türkçe harfler, alt simgeler
+  (CO₂) ve oklar (→) doğru basılır (Windows'ta Segoe UI / Consolas).
+- **TR:** Uydurma yerine tahmin: model emin olmadığı sayı, tarih ve isimleri "tahminim / yaklaşık / doğrulamadım" diye
+  belirtir, okumadığı kaynağı göstermez. Kaynak bölümü olmayan Word/PDF belgelerinin sonuna "kaynak gösterilmeyen
+  bilgileri kontrol et" notu eklenir.
+- **TR:** Günlük brifing (Mustafa'nın fikri): günün ilk açılışında sohbete tek mesaj; selamlama saate göre (akşam
+  açılınca "Günaydın" denmez). İçeriği kullanıcı ilk açılışta seçer, Ayarlar > "Günlük brifing ayarları"ndan değiştirir:
+  hava (yazılan şehir, Open-Meteo), bugünkü ve kaçırılan hatırlatmalar, döviz kurları (Frankfurter), haber başlıkları
+  (Google Haberler RSS). Yapay zekâ kullanılmaz, kota harcamaz; sohbette "brifing" ya da "günün özeti" yazınca da
+  gösterilir. Konum otomatik bulunmaz. Birden fazla şehir virgülle yazılabilir (Bartın, Bilecik). Ayrıca serbest
+  metinle istenen konular ("Galatasaray'ın son maçı, Bitcoin fiyatı") brifingden sonra yapay zekâ ve arama ile
+  cevaplanır (yalnızca bu kısım kota kullanır; boş bırakılırsa çalışmaz).
+- **TR:** 🖥️ Sistem paneli (Mustafa'nın fikri, OMEN Gaming Hub'daki "System Vitals"tan esinlendi): CPU / RAM /
+  ekran kartı (NVIDIA: kullanım ve sıcaklık) halkaları, disk doluluk çubukları, ağ hızı, pil (yüzde ve pil sağlığı),
+  en çok kaynak kullanan programlar (onaylı Kapat); sağlık raporu (disk, bellek, pil, açılış programları, son
+  güvenlik olayları, en büyük dosyalar); işlem defteri (her satırda Geri al, FENIX çöp kutusu); güvenlik olayları
+  listesi. Hepsi yerel okuma, yapay zekâ ve kota kullanmaz. Geçmiş, Raporlar, İstatistik, Ayarlar, Eklentiler,
+  Yetenekler ve Öğrendiklerim panelin üstündeki kısayollara taşındı; sol menü 4 düğmeye indi (Sistem, Hatırlatma,
+  Geçmiş, Nöbete geç). Sol altta küçük CPU / RAM / Disk doluluk çubukları (tıklayınca panel açılır). Panel ve
+  çubuklar seçili modun rengini alır (Güvenli / Normal / Devil); %75 üstü turuncu, %90 üstü kırmızı uyarı rengidir.
+- **TR:** Sağ tık menüsü (Mustafa'nın fikri): Ayarlar'dan açılınca dosyaya/klasöre sağ tıklayınca "FENIX" alt menüsü
+  çıkar: Özetle, Çevir, Bu dosya güvenli mi?, PDF'e dönüştür, FENIX'e sor. İstek yan sohbet (Nöbet) penceresine gider,
+  pencere kapalıysa açılır; ana pencereyi beklemek gerekmez. "Bu dosya güvenli mi?" yapay zekâ kullanmadan Nöbet'in
+  dosya denetimiyle (ad, tür, imza, Windows Defender) cevaplanır. Menü sadece bu kullanıcı için eklenir (yönetici izni
+  gerekmez), Ayarlar'dan tek tıkla kaldırılır. Windows 11'de "Daha fazla seçenek göster" altındadır.
+- **TR:** Seçili metin kısayolu: herhangi bir uygulamada metni seçip sayı tuş takımındaki "+" tuşunu basılı tutunca
+  (~0,5 sn) metin yan sohbete gelir ve "bununla ne yapayım?" diye sorulur (boş Enter = açıkla). Kısa basış eskisi gibi
+  "+" yazar. Ana pencere ve Nöbet aynı anda açıksa kısayolu yalnızca biri dinler. Ayarlar'dan kapatılabilir.
+- **TR:** İşlem defteri ve geri alma (Mustafa'nın fikri): FENIX'in bilgisayarda yaptığı her değişiklik (dosya
+  oluşturma, üzerine yazma, düzenleme, silme, komut, açılıştan kaldırma) `data/islem_defteri.jsonl` dosyasına tek
+  satır olarak yazılır. "Bugün ne yaptın?" listeyi, "son yaptığını geri al" ya da "<numara> geri al" geri almayı
+  yapay zekâya sormadan yapar (kota harcamaz); geri alma onay ister ve var olan bir dosyanın üzerine asla yazmaz.
+- **TR:** FENIX çöp kutusu: FENIX'in sildiği dosyalar Geri Dönüşüm Kutusu yerine `data/cop` klasörüne taşınır, 30 gün
+  sonra FENIX açılışında kalıcı silinir (sadece FENIX'in sildikleri). Üzerine yazılan dosyanın eski hâli de buraya
+  kopyalanır. Dosya başka bir sürücüdeyse Geri Dönüşüm Kutusu kullanılır. PowerShell ile dosya silme komutları
+  `delete_file` aracına yönlendirilir ki her silme geri alınabilsin.
+- **TR:** Hızlı ek yedekler: Groq'un kotası dolunca yavaş NVIDIA'dan önce Mistral, SambaNova ve OpenRouter denenir
+  (OpenAI uyumlu, tek kod). Sadece `config.yaml`'a anahtarı yazılan sağlayıcı kullanılır; hata/kota veren sağlayıcı bir
+  süre dinlendirilir. Hızlı bir yedek varsa Groq'un dakika sınırı uzun beklenmez (en fazla 8 sn). Mistral için araç
+  kimlikleri ve ara sistem notları otomatik uyarlanır. Gemini'ye dokunulmaz (ekran okumaya ayrılmış). Not: 14.11.2026
+  itibarıyla Mistral'ın ücretsiz planında API anahtarları etkin değil (ücretli plan gerekiyor); kart istemeyen
+  seçenekler SambaNova ve OpenRouter.
+- **TR:** Hızlı bir yedek varsa Groq'un dakika sınırında en fazla bir Groq modeline geçilir, sonra yedeğe gidilir
+  (14.11 testinde 120b, 20b ve qwen sırayla denendi; her biri aramayı baştan yaptı, 2 dk'yı geçti).
+- **TR:** Bir işlem (dosya yazma vb.) yapıldıktan sonra sağlayıcı hata verirse iş başka bir sağlayıcıyla baştan
+  başlatılmaz; yapılanlar söylenir (14.11: dosya yazıldıktan sonra Groq sınıra takıldı, aynı dosya ikinci kez
+  yazılacaktı). Yedek denemeleri ve başarısızlık sebepleri (anahtar geçersiz, ödeme gerekiyor, model yok, kota)
+  soldaki günlüğe yazılır. OpenRouter varsayılan modeli `openrouter/free` (araç destekleyen ücretsiz modeli kendisi
+  seçer). Not: 14.11'de SambaNova ücretsiz hesapta 402 "Payment Required" döndürdü.
+- **TR:** Kart istemeyen iki yedek daha: **Cloudflare Workers AI** (Groq'taki aynı `gpt-oss-120b`, günde ~50 soru;
+  token + Account ID) ve **Cohere** deneme anahtarı (ayda 1.000 istek, ticari değil). Varsayılan sıra: Cloudflare →
+  OpenRouter → Cohere → Mistral → SambaNova (ücretli olanlar sonda) → NVIDIA.
+- **TR:** Bozuk yedek cevabı ayıklanır: tek karakterin onlarca kez tekrarı (14.11'de Cloudflare'daki gpt-oss
+  "!!!!…" döndürdü) kullanıcıya gösterilmez, sıradaki model/sağlayıcı denenir; günlüğe yazılır.
+- **TR:** Cloudflare isteklerinde cevap uzunluğu (4096 token) belirtilir; belirtilmeyince Workers AI cevabı yarıda
+  kesiyordu ("…Öğle saat"). Kesilen cevaplar günlüğe yazılır.
+
+## 1.3.0 — 2026-11-13
 - **TR:** Hafif yol: basit sohbet ve hesap sorularında ("selam", "%25 indirim kaç TL", "bir şiir yaz") modele kısa bir
   talimat gider ve araç tanımları gönderilmez (~10.400 yerine ~2.000 karakter). Groq'un ücretsiz katmanında dakikada
   8.000 token sınırı var; tam talimatla ardı ardına iki basit soru bile "dakikalık sınır"a takılıyordu (13.11 testi).

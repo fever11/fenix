@@ -254,6 +254,12 @@ _FILE_WRITE_RE = re.compile(r"set-content|add-content|out-file|\[io\.file\]::wri
                             re.IGNORECASE)
 
 
+# Dosya silme komutları delete_file'a yönlendirilir (geri alınabilsin). Kayıt defteri/sertifika gibi dosya olmayan
+# yollar (HKCU:, Registry::, Cert:, Env:) ve Remove-ItemProperty bu kapsamda değil.
+_DELETE_CMD_RE = re.compile(r"(^|[;|&\s(])(remove-item(?!property)|del|erase|rd|rmdir|rm|ri)(\s|$)", re.IGNORECASE)
+_NON_FILE_PATH_RE = re.compile(r"\b(hk(lm|cu|cr|u|cc)|registry|cert|env|function|variable|alias):", re.IGNORECASE)
+
+
 def _writes_inline_file(command: str) -> bool:
     """Komut, uzun bir içeriği (kod/HTML/metin) dosyaya yazıyor mu? Bunun yerine write_file kullanılmalı:
     onay kutusunu sayfalarca komutla doldurmaz, Türkçe karakter/tırnak kaçış sorunu da olmaz."""
@@ -275,6 +281,11 @@ def run_command(command: str, description: str):
                 "message": ("Dosyaya kod/HTML/metin yazmak için run_command KULLANMA. write_file aracını çağır: "
                             "path (ör. 'masaüstü/muzik_studyosu/index.html') ve content (dosyanın tam içeriği). "
                             "Birden fazla dosya gerekiyorsa her biri için ayrı write_file çağır.")}
+    if _DELETE_CMD_RE.search(command) and not _NON_FILE_PATH_RE.search(command):
+        _notify(f"Yönlendirildi (silme aracı): {description}")
+        return {"status": "error",
+                "message": ("Dosya/klasör silmek için run_command KULLANMA; delete_file aracını çağır (her dosya için "
+                            "ayrı). delete_file işlemi deftere yazar ve geri alınabilir.")}
     _notify(f"İşlem: {description}")
     if _is_risky(command):
         if not _confirm("Kritik İşlem", description, f"Komut:\n{command}"):
@@ -284,7 +295,14 @@ def run_command(command: str, description: str):
             _speak(description)
         except Exception:
             pass
-    return _exec_ps(command)
+    sonuc = _exec_ps(command)
+    if sonuc.get("status") == "ok":
+        try:
+            from . import islem_defteri as DEF
+            DEF.kaydet("komut", description, "", None)
+        except Exception:
+            pass
+    return sonuc
 
 
 def open_app_by_name(app_name: str):
@@ -862,6 +880,9 @@ def edit_file(path: str, old_text: str, new_text: str = "", reason: str = ""):
     except Exception as e:
         report_error("dosya düzenleme", f"{full}: {e}")
         return {"status": "error", "message": GENERIC_ERROR}
+    from . import islem_defteri as DEF
+    DEF.kaydet("duzenleme", f"{os.path.basename(full)} ({first_line}. satır" + (f", {reason}" if reason else "") + ")",
+               full, {"islem": "yedekten_geri", "yedek": backup, "yol": full})
     _notify(f"Dosya düzenlendi: {os.path.basename(full)} ({first_line}. satır)")
     return {"status": "ok", "yol": full, "satir": first_line,
             "degisen": "silindi" if not new_text else "değiştirildi", "yedek": backup,
@@ -890,10 +911,21 @@ def write_file(path: str, content: str, overwrite: bool = False):
         if not overwrite:
             return {"status": "error", "message": "Bu dosya zaten var. Üzerine yazmak için kullanıcıya sor; isterse "
                                                   "overwrite=true ile tekrar çağır (onay kutusu çıkar)."}
-        if not _confirm("Dosyanın üzerine yazılacak", os.path.basename(path), f"Yol:\n{path}"):
+        if not _confirm("Dosyanın üzerine yazılacak", os.path.basename(path),
+                        f"Yol:\n{path}\n\nEski hâli FENIX çöp kutusuna kopyalanır; geri alınabilir."):
             return {"status": "cancelled", "message": "Kullanıcı onaylamadı."}
     elif outside and not _confirm("Kullanıcı klasörü dışına dosya yazılacak", os.path.basename(path), f"Yol:\n{path}"):
         return {"status": "cancelled", "message": "Kullanıcı onaylamadı."}
+    from . import islem_defteri as DEF
+    eski_kopya = DEF.cope_kopyala(path) if os.path.exists(path) else None
+
+    def _deftere():
+        ad = f"{os.path.basename(path)} ({os.path.dirname(path)})"
+        if eski_kopya:
+            DEF.kaydet("uzerine_yazma", ad, path, {"islem": "yedekten_geri", "yedek": eski_kopya, "yol": path})
+        else:
+            DEF.kaydet("olusturma", ad, path, {"islem": "olusturulani_kaldir", "yol": path})
+
     ext = os.path.splitext(path)[1].lower()
     if ext in (".docx", ".pdf"):
         # Word/PDF düz metin olarak yazılırsa dosya bozuk açılır: içerik Markdown kabul edilip gerçek belgeye çevrilir.
@@ -901,10 +933,15 @@ def write_file(path: str, content: str, overwrite: bool = False):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             from . import report_export
             md = (content or "").replace("\\n", "\n")         # model bazen satır sonunu kaçışlı yazıyor
+            if not re.search(r"(?im)^#+\s*(kaynak|referans)", md):
+                # v1.4: kaynak gösterilmeyen belgeye dürüst bir not (uydurma yerine tahmin ilkesi)
+                md += ("\n\n_Bu belge FENIX tarafından yapay zekâ ile hazırlandı. Kaynak gösterilmeyen bilgileri "
+                       "önemli işlerde (sınav, ödev, resmî yazı) bir kaynaktan kontrol et._")
             (report_export.export_docx if ext == ".docx" else report_export.export_pdf)(md, path)
         except Exception as e:
             report_error("belge yazma", f"{path}: {e}")
             return {"status": "error", "message": GENERIC_ERROR}
+        _deftere()
         _notify(f"Belge oluşturuldu: {path}")
         return {"status": "ok", "yol": path, "bicim": ext[1:], "boyut": _fmt_size(os.path.getsize(path))}
     try:
@@ -916,6 +953,7 @@ def write_file(path: str, content: str, overwrite: bool = False):
     except Exception as e:
         report_error("dosya yazma", f"{path}: {e}")
         return {"status": "error", "message": GENERIC_ERROR}
+    _deftere()
     _notify(f"Dosya yazıldı: {path}")
     return {"status": "ok", "yol": path, "boyut": _fmt_size(len((content or '').encode('utf-8')))}
 
@@ -1848,6 +1886,11 @@ def remove_startup_program(name: str):
             # Tabandan da çıkar: aynı şey kendini yeniden eklerse "yeni" olarak yakalansın
             base["kayitlar"].pop(startup_entry_key(e), None)
             _save_json(_STARTUP_BASELINE_PATH, base)
+    try:
+        from . import islem_defteri as DEF
+        DEF.kaydet("baslangic", e["ad"], "", {"islem": "baslangic", "ad": e["ad"]})
+    except Exception:
+        pass
     return {"status": "ok", "message": f"'{e['ad']}' artık açılışta başlamayacak. Yedeği alındı.",
             "not": ("Şu an çalışan bir kopyası varsa hâlâ açık olabilir (stop_process ile kapatılabilir). "
                     "Geri almak için restore_startup_program.")}
@@ -2044,7 +2087,9 @@ NEW_SCHEMAS = [
      "description": ("Yeni dosya oluşturur ve içine yazar (kod, not, ödev taslağı). Varsayılan yer Masaüstü. Var olan "
                      "dosyanın üzerine yazmak için overwrite=true gerekir ve kullanıcıdan onay istenir. WORD ve PDF "
                      "belgesi de oluşturur: yol .docx ya da .pdf ile bitsin, content Markdown olsun (# başlık, - madde, "
-                     "| tablo |, **kalın**); program onu gerçek Word/PDF belgesine çevirir."),
+                     "| tablo |, **kalın**, '::: tanim/ornek/ipucu/uyari/ozet/formul/soru/adim/tahmin … :::' kutuları, "
+                     "ilk satırda <!-- tema: renk -->); program onu kapaklı, renkli, sayfa numaralı gerçek Word/PDF "
+                     "belgesine çevirir."),
      "parameters": {"type": "object", "properties": {
          "path": {"type": "string", "description": "Dosya adı ya da yol (ör. 'masaüstü/odev/rapor.md')"},
          "content": {"type": "string"}, "overwrite": {"type": "boolean"}}, "required": ["path", "content"]}},

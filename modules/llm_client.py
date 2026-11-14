@@ -151,7 +151,9 @@ def build_system_instruction(mode_key, mode_cfg):
         "önceki sohbetlerden (JARVIS'ten aktarılanlar dahil) bulunan kayıtlardır; geçmiş bir konu sorulursa 'kayıt yok' "
         "demeden önce bunlara bak ve oradaki bilgiyle cevap ver. Orada sadece kullanıcının mesajları varsa bunu belirt. "
         "DOĞRULUK: Kullanıcı yanlış ya da tartışmalı bir şeyi onaylatmaya çalışırsa ('…değil mi?') ona uyma; "
-        "doğrusunu ya da tartışmanın iki tarafını söyle.\n"
+        "doğrusunu ya da tartışmanın iki tarafını söyle. UYDURMA YERİNE TAHMİN: Emin olmadığın bir sayı, tarih, isim ya "
+        "da olguyu kesin bilgi gibi yazma; ya 'tahminim/yaklaşık/doğrulamadım' diye açıkça belirt ya da araştır. Bir "
+        "kaynağı okumadıysan kaynak gösterme, olmayan bir kaynak ya da bağlantı uydurma.\n"
         "ÖNEMLİ: Geçmiş bağlamdaki istekler (dosya oluştur, sil, aç vb.) ESKİDİR ve zaten yapılmıştır; onları ASLA "
         "kendiliğinden yeniden yapma. Araç çağırmayı yalnızca kullanıcının ŞU ANKİ mesajı gerektiriyorsa yap.\n\n"
         "HATALAR: Bir araç hata verirse hata metnini ASLA okuma ya da aktarma. Sadece "
@@ -160,7 +162,18 @@ def build_system_instruction(mode_key, mode_cfg):
         "WEB: Web sayfası okumak/aramak için ASLA run_command (PowerShell) kullanma; read_webpage ve "
         "search_web araçlarını kullan.\n\n"
         "DOSYA OLUŞTURMA: Kod, HTML/CSS/JS, metin, Word (.docx) ya da PDF gibi bir dosya oluşturmak için HER ZAMAN "
-        "write_file kullan (path + content; Word/PDF için content Markdown). UZUN BELGE: önce gereken bilgiyi topla "
+        "write_file kullan (path + content; Word/PDF için content Markdown). GÜZEL BELGE (Word/PDF): Sabit şablon "
+        "yok; içeriğe göre yapıyı SEN kur ve her belgede konuya uygun yapı taşlarını seç. İlk satıra konuya uygun bir "
+        "renk yaz: <!-- tema: mavi|yesil|mor|turuncu|kirmizi|lacivert|turkuaz|gri|pembe -->, sonra '# Başlık' "
+        "(kapak olur). Yapı taşları ('::: tür isteğe bağlı başlık' ile açılır, ayrı bir satırda ':::' ile kapanır): "
+        "tanim, ornek, ipucu, uyari, ozet, formul, soru (satırlar 'S: …' / 'C: …'), adim (her satır bir adım), not, "
+        "alinti, tahmin (doğrulamadığın bilgiler). Ayrıca ## bölüm başlıkları, | tablo |, - madde, > alıntı, **kalın** "
+        "kullan. Ders notunda: kısa giriş, tanımlar, örnekler, tablo ile karşılaştırma, sınav ipuçları, 'Kendini dene' "
+        "soruları ve özet iyi çalışır; ama her konuda hepsini kullanmak zorunda değilsin. UZUNLUK: Ders notu, rapor ya "
+        "da tanıtım belgesi istenince KISA TUTMA: konuyu baştan sona kapsayan, genelde 3-6 sayfalık (en az 6-8 ## "
+        "bölüm, her bölümde açıklama + örnek/tablo/kutu) eksiksiz bir belge yaz; her kavramı açıkla, sadece madde "
+        "listesi bırakma. Kullanıcı 'kısa', 'özet', 'tek sayfa' derse kısa tut. Araştırdıysan sonda "
+        "'## Kaynaklar' bölümü yaz. UZUN BELGE: önce gereken bilgiyi topla "
         "(araştırma gerekiyorsa en fazla 3-4 arama), sonra belgeyi TEK SEFERDE eksiksiz yaz; yazdıktan sonra yeniden "
         "araştırıp aynı belgeyi tekrar yazma. İstenen bölümlerin hepsini yaz, bilgi yoksa o bölüme 'bilgi bulunamadı' "
         "yaz. run_command ile Set-Content / Out-File / @' ... '@ kullanarak dosyaya içerik yazma. "
@@ -268,7 +281,8 @@ def build_light_instruction(mode_key):
         "LaTeX kullanma, düz yaz; hesapları kısa, adım adım ve düz metinle göster.\n"
         "HAFIZA: '[İlgili geçmiş bağlam]' başlığıyla verilenler bu sohbetin son mesajları ve kalıcı hafızandır; "
         "'hafızam yok' deme. Oradaki istekler eskidir, yeniden yapma. Kısa takip sorularını önceki konuya bağla.\n"
-        "DOĞRULUK: Yanlış bir şeyi onaylatmaya çalışılırsa uyma, doğrusunu söyle. Bildiğinle tahminini ayır. "
+        "DOĞRULUK: Yanlış bir şeyi onaylatmaya çalışılırsa uyma, doğrusunu söyle. Bildiğinle tahminini ayır; emin "
+        "olmadığın sayı/tarih/ismi 'tahminim' ya da 'yaklaşık' diye belirt, kaynak uydurma. "
         "Övgüyle başlama.\n"
         "ZAMAN: Mesajın başındaki '[Şu an: ...]' satırı güncel tarih/saattir; cevaba kopyalama.\n"
         "TAM YOL: Bu kısa talimatla sadece sohbet, genel bilgi, yazma/çeviri ve eldeki sayılarla hesap cevaplanır; "
@@ -494,11 +508,21 @@ class LLMClient:
             headers = {"Authorization": f"Bearer {nvidia.CFG['key']}", "Content-Type": "application/json"}
             # NVIDIA ücretsiz katmanı yavaş olabilir ama 240 sn beklemek kullanıcıyı kilitliyordu (07.11): en fazla 120
             timeout = min(max(timeout, nvidia.CFG.get("timeout", 120)), 120)
+        elif str(endpoint).startswith("yedek:"):
+            from . import yedekler
+            ad = endpoint.split(":", 1)[1]
+            p = yedekler.bilgi(ad) or {}
+            url = p.get("url")
+            headers = {"Authorization": f"Bearer {p.get('anahtar', '')}", "Content-Type": "application/json"}
+            payload = yedekler.uyarla(ad, payload)
+            timeout = min(timeout, 60)
         else:
             url = "https://api.groq.com/openai/v1/chat/completions"
             headers = {"Authorization": f"Bearer {self.groq_api_key}", "Content-Type": "application/json"}
         if endpoint != "nvidia":
             max_wait = min(max_wait, getattr(self, "_dk_bekleme_siniri", None) or max_wait)
+        if endpoint == "groq" and self._yedek_var():
+            max_wait = min(max_wait, 8)          # hızlı yedek varsa Groq'un dakika sınırını uzun beklemeden ona geç
         for attempt in range(4):
             self._iptal_kontrol()
             sure = self._kalan_sure(timeout)
@@ -513,13 +537,17 @@ class LLMClient:
                     wait = 2 ** attempt * 3
                 if wait > max_wait:
                     break                        # uzun bekleme: üst katman başka modele geçer
-                self.yavaslik_notu("Groq dakikalık sınırına takıldı, beklendi")
+                self.yavaslik_notu(("Groq" if endpoint == "groq" else str(endpoint).split(":")[-1].title())
+                                   + " dakikalık sınırına takıldı, beklendi")
                 print(f"[GROQ] hız sınırı, {wait:.0f} sn bekleniyor...")
                 self._sure_ekle(wait)
                 self._uyu(wait)
                 continue
             r.raise_for_status()
-            return r.json()
+            veri = r.json()
+            if endpoint != "groq":
+                self._bozuk_cikti_mi(veri, endpoint)
+            return veri
         r.raise_for_status()
         return r.json()
 
@@ -541,10 +569,26 @@ class LLMClient:
                     payload.update(extra)        # ör. öğrenme alanı: {"reasoning_effort": "low", "max_tokens": ...}
                 data = self._groq_post(payload)
                 return data["choices"][0]["message"].get("content") or ""
+            except GorevIptal:
+                raise
             except Exception as e:
-                if not gemini_fallback and not self._nvidia_models():
+                if not gemini_fallback and not self._nvidia_models() and not self._yedek_var():
                     raise
                 print(f"[GROQ UYARI] {e} -> sıradaki sağlayıcı")
+        from . import yedekler
+        for ad in yedekler.sira():
+            p = yedekler.bilgi(ad) or {}
+            for model in p.get("modeller", [])[:1]:
+                try:
+                    payload = {"model": model, "temperature": temperature,
+                               "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]}
+                    data = self._groq_post(payload, endpoint=f"yedek:{ad}")
+                    return data["choices"][0]["message"].get("content") or ""
+                except GorevIptal:
+                    raise
+                except Exception as e:
+                    yedekler.dinlendir(ad)
+                    print(f"[{ad.upper()} UYARI] {model}: {str(e)[:120]}")
         for nm in self._nvidia_models()[:2]:
             try:
                 payload = {"model": nm, "temperature": temperature,
@@ -589,6 +633,8 @@ class LLMClient:
     _CORE_TOOLS = {"open_app_by_name", "open_url", "open_folder_by_name", "run_command", "search_web",
                    "look_at_screen", "write_file"}
     _TOOL_GROUPS = [
+        (r"geri al|ne yaptın|neler yaptın|işlem defter|neleri değiştirdin|değiştirdiklerin|geri getir",
+         {"undo_action", "action_log"}),
         (r"dosya|klasör|klasor|kod|ödev|odev|proje|\.py|\.js|\.ts|\.md|\.txt|\.docx|\.pdf|\.html?|\.css|\.json|"
          r"oku|kaydet|yaz|masaüstü|masaustu|belge|indirilen|listele|bul|html|css|footer|header|düzelt|duzelt|"
          r"kaldır|kaldir|değiştir|degistir|sayfa|site", {"find_files", "list_folder", "read_file", "write_file",
@@ -671,7 +717,7 @@ class LLMClient:
 
     # Kullanılan araç işin gerçek türünü gösterir ("sohbet" sanılan iş aramaya dönüştüyse süre uzar)
     _ARAC_TURU = {"search_web": "guncel", "read_webpage": "guncel", "write_file": "dosya", "edit_file": "dosya",
-                  "read_file": "dosya", "find_files": "dosya", "list_folder": "dosya", "fenix_hakkinda": "sohbet"}
+                  "read_file": "dosya", "find_files": "dosya", "delete_file": "dosya", "undo_action": "dosya", "list_folder": "dosya", "fenix_hakkinda": "sohbet"}
 
     _ARAC_KONU_RE = re.compile(
         r"unut|hafızandan|hafizandan|ekran|\bses\b|\bsesi|\bkıs\b|sessiz|parlaklı|wi-?fi|bluetooth|medya|müzik|şarkı|"
@@ -931,7 +977,8 @@ class LLMClient:
                         payload["messages"] = [system] + with_ctx(self._trim_hist(hist))
                         msg = self._groq_post(payload, endpoint=ep)["choices"][0]["message"]
                     else:
-                        fx.report_error("NVIDIA" if ep == "nvidia" else "Groq", f"{code}: {body}")
+                        fx.report_error("NVIDIA" if ep == "nvidia" else ep.split(":")[-1].title() if ep.startswith("yedek:")
+                                        else "Groq", f"{code}: {body}")
                         raise
                 raw_calls = msg.get("tool_calls") or []
                 # Model bazen adı boş/bozuk bir araç çağrısı üretir; geçmişe girerse Groq sonraki her istekte
@@ -1317,7 +1364,8 @@ class LLMClient:
         use_gemini = bool(screenshot_b64)          # yalnızca ekran görme Gemini ister
         provider = mode_cfg.get("provider", "gemini")
 
-        if provider in ("groq", "nvidia") and not use_gemini and (self.groq_api_key or self._nvidia_models()):
+        if provider in ("groq", "nvidia") and not use_gemini and (self.groq_api_key or self._nvidia_models()
+                                                                   or self._yedek_var()):
             try:
                 return strip_time_stamp(self._fast_chain(mode_key, mode_cfg, user_text, memory_context))
             except Exception as e:
@@ -1325,6 +1373,14 @@ class LLMClient:
                     e, lambda: self._gemini_chat(mode_key, mode_cfg, user_text, screenshot_b64, memory_context)))
 
         return strip_time_stamp(self._gemini_chat(mode_key, mode_cfg, user_text, screenshot_b64, memory_context))
+
+    @staticmethod
+    def _yedek_var():
+        try:
+            from . import yedekler
+            return bool(yedekler.sira())
+        except Exception:
+            return False
 
     @staticmethod
     def _nvidia_models():
@@ -1336,13 +1392,54 @@ class LLMClient:
 
     def _provider_order(self, mode_cfg):
         """Hızlı sağlayıcı sırası: moddaki provider önce; diğeri yedek. Gemini en sonda (ask içinde)."""
-        order = ["nvidia", "groq"] if mode_cfg.get("provider") == "nvidia" else ["groq", "nvidia"]
-        return [p for p in order if (p == "groq" and self.groq_api_key) or (p == "nvidia" and self._nvidia_models())]
+        from . import yedekler
+        ek = [f"yedek:{a}" for a in yedekler.sira()]
+        # v1.4: Groq dolunca önce hızlı ek yedekler (Mistral, SambaNova, OpenRouter), en son yavaş NVIDIA
+        order = (["nvidia", "groq"] + ek) if mode_cfg.get("provider") == "nvidia" else (["groq"] + ek + ["nvidia"])
+        return [p for p in order if (p == "groq" and self.groq_api_key) or (p == "nvidia" and self._nvidia_models())
+                or p.startswith("yedek:")]
+
+    def _yedek_with_fallback(self, ep, mode_key, mode_cfg, user_text, memory_context=""):
+        """Ek yedek sağlayıcının modellerini sırayla dener. Hata/kota olursa sağlayıcı bir süre dinlendirilir."""
+        from . import yedekler
+        ad = ep.split(":", 1)[1]
+        p = yedekler.bilgi(ad) or {}
+        last = None
+        for model in p.get("modeller", []):
+            try:
+                out = self._groq_agent_chat(mode_key, dict(mode_cfg, groq_model=model, _endpoint=ep),
+                                            user_text, memory_context)
+                self.yavaslik_notu(f"Groq dolu, yedek {p.get('ad', ad)} kullanıldı")
+                fx._notify(f"Yedek sağlayıcı kullanıldı: {p.get('ad', ad)} ({model})")
+                return out
+            except GorevIptal:
+                raise
+            except Exception as e:
+                last = e
+                metin = str(e).lower()
+                yedekler.dinlendir(ad, gunluk=("day" in metin or "daily" in metin or "günlük" in metin))
+                kod = getattr(getattr(e, "response", None), "status_code", None)
+                neden = {401: "anahtar geçersiz", 402: "ödeme/kredi gerekiyor", 403: "erişim reddedildi",
+                         404: "model bulunamadı", 429: "kota/sınır dolu"}.get(kod, str(e)[:80])
+                if kod in (401, 402, 403):
+                    yedekler.dinlendir(ad, gunluk=True)      # anahtar/hesap sorunu: kısa sürede düzelmez
+                self.not_yaz(f"yedek {p.get('ad', ad)} olmadı ({neden}) → sıradaki sağlayıcı")
+                body = (getattr(getattr(e, "response", None), "text", "") or "")[:200]
+                fx.report_error(p.get("ad", ad), f"{model}: {str(e)[:200]} {body}")
+        raise last or RuntimeError(f"{ad} modeli yok")
 
     def _nvidia_with_fallback(self, mode_key, mode_cfg, user_text, memory_context=""):
         """NVIDIA modellerini sırayla dener (OpenAI uyumlu, araç çağırmalı)."""
         last = None
         self.yavaslik_notu("yedek NVIDIA modeline geçildi (ücretsiz katmanı yavaş)")
+        try:
+            from . import yedekler
+            if not yedekler._SIRA:
+                self.not_yaz("hızlı yedek yok (config.yaml'da SambaNova/OpenRouter/Mistral anahtarı bulunamadı)")
+            elif not yedekler.sira():
+                self.not_yaz("hızlı yedekler az önce hata/kota verdi, bir süre dinleniyor")
+        except Exception:
+            pass
         self._sure_ekle(60)          # yedek model yavaş: ek süre (kota beklemeleriyle birlikte en fazla 2 dk)
         for nm in self._nvidia_models():
             try:
@@ -1358,15 +1455,56 @@ class LLMClient:
     def _fast_chain(self, mode_key, mode_cfg, user_text, memory_context=""):
         """Groq ve NVIDIA'yı sırayla dener; ikisi de olmazsa son hatayı yükseltir (ask -> Gemini)."""
         last = None
+        t_bas = time.time()
         for p in self._provider_order(mode_cfg):
             try:
                 if p == "groq":
                     return self._groq_with_fallback(mode_key, mode_cfg, user_text, memory_context)
+                if p.startswith("yedek:"):
+                    return self._yedek_with_fallback(p, mode_key, mode_cfg, user_text, memory_context)
                 return self._nvidia_with_fallback(mode_key, mode_cfg, user_text, memory_context)
             except Exception as e:
                 last = e
                 print(f"[{p.upper()} UYARI] {str(e)[:120]} -> sıradaki sağlayıcı")
+                # 14.11 testi: Groq dosyayı yazdıktan sonra dakika sınırına takıldı, iş baştan yedek sağlayıcıya
+                # verildi; aynı dosya ikinci kez yazılacaktı. Bilgisayarda bir değişiklik yapıldıysa başka sağlayıcıyla
+                # baştan başlanmaz: yapılanlar söylenir.
+                yapilan = self._yapilan_degisiklikler(t_bas)
+                if yapilan:
+                    self.not_yaz("işlem yapıldıktan sonra sağlayıcı hata verdi → tekrar yapmamak için durduldu")
+                    # 14.11: iş bitmişti ama mesaj uzun ve endişe verici okunuyordu; artık önce yapılan söylenir
+                    neden = _groq_reason(e) if p == "groq" else str(e)[:80]
+                    return ("Tamam, yaptım: " + "; ".join(yapilan) + ".\n\n(Son cevabı yazarken model servisinde bir "
+                            f"sorun çıktı: {neden}. Aynı işlemi ikinci kez yapmamak için orada durdum; eksik kalan bir "
+                            "şey varsa söylemen yeterli.)")
         raise last or RuntimeError("hızlı sağlayıcı yok")
+
+    _BOZUK_CIKTI_RE = re.compile(r"^\s*(\S)\1{15,}\s*$|(.)\2{40,}", re.DOTALL)
+
+    def _bozuk_cikti_mi(self, veri, endpoint):
+        """14.11 testi: Cloudflare'daki gpt-oss cevap yerine sadece '!!!!!!…' döndürdü. Böyle bozuk bir çıktı
+        kullanıcıya gösterilmez; hata sayılır, sıradaki model/sağlayıcı denenir."""
+        try:
+            icerik = (veri.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+        except Exception:
+            return
+        try:
+            if (veri.get("choices") or [{}])[0].get("finish_reason") == "length":
+                self.not_yaz(f"{str(endpoint).split(':')[-1].title()} cevabı uzunluk sınırında kesildi")
+        except Exception:
+            pass
+        if icerik and self._BOZUK_CIKTI_RE.search(icerik):
+            self.not_yaz(f"{str(endpoint).split(':')[-1].title()} bozuk cevap verdi ('{icerik[:6]}…') → yok sayıldı")
+            raise RuntimeError(f"bozuk çıktı: {icerik[:20]!r}")
+
+    @staticmethod
+    def _yapilan_degisiklikler(t_bas):
+        try:
+            from . import islem_defteri as DEF
+            return [f"{DEF.TUR_ADI.get(k['tur'], k['tur'])}: {k['ozet']}" for k in DEF.oku()
+                    if k.get("zaman", 0) >= t_bas - 1 and k.get("tur") != "geri_alma"][-5:]
+        except Exception:
+            return []
 
     def _groq_with_fallback(self, mode_key, mode_cfg, user_text, memory_context=""):
         """Moddaki Groq modeli, günlük sınırı dolarsa yedek Groq modelleri (ör. gpt-oss-20b). Günlük sınırı dolan
@@ -1391,6 +1529,11 @@ class LLMClient:
             # geçiliyordu; 20b'nin kendi dakika kotası boştu. Sırada başka Groq modeli varsa kısa beklenir, geçilir.
             denenen.add(gm)
             sonraki_var = any(m not in denenen and cooldown.get(m, (0, ""))[0] <= time.time() for m in sirali)
+            if sonraki_var and len(denenen) >= 2 and self._yedek_var():
+                # 14.11 testi: 120b ve 20b dakika sınırına takıldı, 3. Groq modeli de denendi; her model aramayı
+                # baştan yaptı (138 sn+). Hızlı bir yedek (SambaNova vb.) varsa en fazla bir Groq modeline geçilir,
+                # sonra yedeğe gidilir.
+                sonraki_var = False
             self._dk_bekleme_siniri = 5 if sonraki_var else None
             islem_once = fx.ISLEM_SAYACI[0]
             try:

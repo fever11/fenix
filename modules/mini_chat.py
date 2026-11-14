@@ -55,6 +55,8 @@ class Backend:
         try:
             from . import nvidia
             nvidia.configure(cfg)       # NVIDIA: sohbet yedeği + görme son yedeği
+            from . import yedekler
+            yedekler.configure(cfg)     # v1.4: Cloudflare / OpenRouter / Cohere ... (NVIDIA'dan önce)
         except Exception:
             pass
         self.llm = LLMClient(keys.get("gemini", ""), keys.get("groq", ""), fallbacks=cfg.get("gemini_fallbacks"),
@@ -192,6 +194,7 @@ def build_window(ctk, cfg, backend_factory, start_hidden=False):
             self.q = queue.Queue()
             self.backend = None
             self.busy = False
+            self._ek = None                 # sağ tık / Numpad + ile gelen ek: {"tur": "metin"|"dosya", "deger": ...}
             self._confirm_event = threading.Event()
             self._confirm_value = {"v": False}
             from . import nobet
@@ -303,13 +306,55 @@ def build_window(ctk, cfg, backend_factory, start_hidden=False):
             try:
                 if os.path.exists(SHOW_PATH):
                     os.remove(SHOW_PATH)
-                    self.deiconify()
-                    self.lift()
-                    self.focus_force()
-                    self.entry.focus_set()
+                    self._one_getir()
             except Exception:
                 pass
-            self.after(500, self._poll_show)
+            try:
+                if self.backend and not self.busy:
+                    self._istek_isle()
+            except Exception as e:
+                print(f"[YAN SOHBET] istek işlenemedi: {e}")
+            self.after(400, self._poll_show)
+
+        def _one_getir(self):
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+            self.entry.focus_set()
+
+        def _istek_isle(self):
+            """Sağ tık menüsü ve Numpad + istekleri (v1.4). Her seferinde bir istek; iş bitince sıradaki."""
+            from . import sag_tik
+            istekler = sag_tik.istekleri_al()
+            if not istekler:
+                return
+            # Birden fazla dosya seçilip menüye tıklanınca her dosya için ayrı istek gelir; ilki şimdi, kalanlar
+            # sırayla (kuyruğa geri yazılır).
+            for k in istekler[1:]:
+                sag_tik.istek_yaz(k.get("eylem"), yol=k.get("yol"), metin=k.get("metin"))
+            k = istekler[0]
+            self._one_getir()
+            if k.get("eylem") == "guvenli":
+                yol = k.get("yol") or ""
+                self.add("user", f"Bu dosya güvenli mi? {yol}")
+                self.busy = True
+                self.send_btn.configure(state="disabled")
+                self.status.configure(text="Dosya denetleniyor…")
+                threading.Thread(target=lambda: self.q.put(("answer", sag_tik.guvenlik_raporu(yol))),
+                                 daemon=True).start()
+                return
+            metin, ek, not_ = sag_tik.istek_metni(k)
+            if metin:
+                self.entry.delete(0, "end")
+                self.entry.insert(0, metin)
+                self.send()
+                return
+            if ek:
+                self._ek = {"tur": "metin" if k.get("eylem") == "metin" else "dosya", "deger": ek}
+                self.add("sys", not_ + "\nNe yapayım? Yaz ve Enter'a bas (boş bırakıp Enter: "
+                         + ("açıkla" if self._ek["tur"] == "metin" else "özetle") + ").")
+                self.entry.configure(placeholder_text="Bununla ne yapayım?")
+                self.entry.focus_set()
 
         def _poll_ram(self):
             try:
@@ -339,13 +384,24 @@ def build_window(ctk, cfg, backend_factory, start_hidden=False):
 
         def send(self):
             text = self.entry.get().strip()
-            if not text or self.busy:
+            ek = self._ek
+            if (not text and not ek) or self.busy:
                 return
             if not self.backend:
                 self.add("sys", "Hâlâ hazırlanıyorum, birkaç saniye sonra tekrar dene.")
                 return
             self.entry.delete(0, "end")
-            self.add("user", text)
+            gorunen = text
+            if ek:
+                self._ek = None
+                self.entry.configure(placeholder_text="Yaz ve Enter'a bas…")
+                if ek["tur"] == "metin":
+                    text = (text or "Bunu açıkla") + "\n\n[Seçili metin]\n" + ek["deger"][:6000]
+                    gorunen = (gorunen or "Bunu açıkla") + "  (seçili metin)"
+                else:
+                    text = (text or "Bu dosyayı oku ve kısaca özetle") + f"\nDosya: {ek['deger']}"
+                    gorunen = (gorunen or "Bu dosyayı özetle") + f"  ({os.path.basename(ek['deger'])})"
+            self.add("user", gorunen)
             self.busy = True
             self.send_btn.configure(state="disabled")
             self.status.configure(text="Düşünüyorum…")

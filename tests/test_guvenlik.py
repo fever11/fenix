@@ -53,7 +53,7 @@ def test_zararsiz_komut_riskli_sayilmaz(komut):
 def test_riskli_komut_onaysiz_calismaz(monkeypatch):
     sorulan = []
     monkeypatch.setattr(fx, "_confirm", lambda *a, **k: sorulan.append(a) or False)
-    r = fx.run_command("Remove-Item C:\\Users\\x\\proje -Recurse", "Proje klasörünü sil")
+    r = fx.run_command("Stop-Process -Name chrome", "Chrome'u kapat")
     assert sorulan, "Riskli komut için onay sorulmadı"
     assert r["status"] == "cancelled"          # _exec_ps çağrılsaydı test hata verirdi (conftest)
 
@@ -62,8 +62,24 @@ def test_riskli_komut_onaylaninca_calisir(monkeypatch):
     calisan = []
     monkeypatch.setattr(fx, "_confirm", lambda *a, **k: True)
     monkeypatch.setattr(fx, "_exec_ps", lambda c, *a, **k: calisan.append(c) or {"status": "ok", "message": ""})
-    fx.run_command("Remove-Item C:\\temp\\a.txt", "Dosyayı sil")
-    assert calisan == ["Remove-Item C:\\temp\\a.txt"]
+    fx.run_command("Stop-Process -Name chrome", "Chrome'u kapat")
+    assert calisan == ["Stop-Process -Name chrome"]
+
+
+@pytest.mark.parametrize("komut", ["Remove-Item C:\\Users\\x\\proje -Recurse", "del C:\\temp\\a.txt",
+                                   "rd /s /q C:\\temp", "Get-ChildItem C:\\x | rm"])
+def test_dosya_silme_komutu_delete_file_araci_na_yonlenir(monkeypatch, komut):
+    """v1.4: dosya silme run_command ile yapılmaz; delete_file işlemi deftere yazar ve geri alınabilir."""
+    monkeypatch.setattr(fx, "_confirm", lambda *a, **k: pytest.fail("Silme komutu onay kutusuna düşmemeli"))
+    r = fx.run_command(komut, "sil")
+    assert r["status"] == "error" and "delete_file" in r["message"]
+
+
+def test_kayit_defteri_silme_yonlendirilmez(monkeypatch):
+    sorulan = []
+    monkeypatch.setattr(fx, "_confirm", lambda *a, **k: sorulan.append(a) or False)
+    r = fx.run_command("Remove-Item HKCU:\\Software\\X -Recurse", "Kayıt anahtarını sil")
+    assert sorulan and r["status"] == "cancelled"
 
 
 @pytest.mark.parametrize("komut", ["Invoke-WebRequest https://ornek.com -OutFile a.exe",

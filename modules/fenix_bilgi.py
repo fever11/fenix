@@ -28,7 +28,24 @@ MOD_ACIKLAMA = {
 KATEGORI = [
     ("Dosya ve belge", ["find_files", "list_folder", "read_file", "write_file", "edit_file", "delete_file",
                         "open_folder_by_name", "export_report"],
-     "write_file .txt/kod dosyası ve gerçek Word (.docx) / PDF belgesi yazar; delete_file Geri Dönüşüm Kutusu'na taşır"),
+     "write_file .txt/kod dosyası ve gerçek Word (.docx) / PDF belgesi yazar; delete_file FENIX çöp kutusuna taşır "
+     "(30 gün sonra kalıcı silinir). 'Ders notu çıkar' istekleri bölüm bölüm yazılır: uzunluk verilen kaynak "
+     "miktarına göre artar, her kaynak parçası bir bölümde kullanılır, sonda Kendini Dene soruları ve özet olur"),
+    ("Günlük brifing", [],
+     "Günün ilk açılışında saate göre selamlayıp seçilen bilgileri verir (hava, bugünkü hatırlatmalar, kur, haber); "
+     "Ayarlar > Günlük brifing ayarları. Sohbette 'brifing' ya da 'günün özeti' yazınca da gösterilir; yapay zekâ "
+     "kullanmaz"),
+    ("Sistem paneli", [],
+     "Sol menüdeki 🖥️ Sistem: CPU/RAM/ekran kartı/disk/ağ/pil göstergeleri, en çok kaynak kullanan programlar, "
+     "sağlık raporu, işlem defteri (Geri al) ve güvenlik olayları; Geçmiş, Raporlar, İstatistik, Ayarlar, Eklentiler, "
+     "Yetenekler ve Öğrendiklerim de buradan açılır"),
+    ("Sağ tık ve seçili metin", [],
+     "Ayarlar'dan açılır: dosyaya/klasöre sağ tıklayınca 'FENIX' menüsü (Özetle, Çevir, Bu dosya güvenli mi?, PDF'e "
+     "dönüştür, FENIX'e sor; Windows 11'de 'Daha fazla seçenek göster' altında). Herhangi bir uygulamada metni seçip "
+     "sayı tuş takımındaki + tuşunu basılı tutunca metin yan sohbete gelir (kısa basış + yazar)"),
+    ("İşlem defteri", ["action_log", "undo_action"],
+     "FENIX'in bilgisayarda yaptığı her değişiklik deftere yazılır; 'bugün ne yaptın?' ile listelenir, 'son yaptığını "
+     "geri al' ile geri alınır (silinen dosya yerine döner, oluşturulan kaldırılır, düzenlenen eski hâline döner)"),
     ("Web", ["search_web", "read_webpage", "open_url", "check_link", "inspect_website_security", "cookie_guard"],
      "check_link sahte site/bağlantı kontrolü yapar"),
     ("Bilgisayar kontrolü", ["adjust_volume", "set_system_volume", "set_brightness", "set_radio", "media_control",
@@ -92,6 +109,9 @@ def _modeller():
     out = [f"Sohbet ve araçlar: Groq üzerinden açık kaynak modeller ({', '.join(sohbet)}). Groq anahtarı: "
            f"{'girilmiş' if _anahtar_var('groq') else 'yok'}.",
            "Groq yedekleri (günlük sınır dolarsa): " + (", ".join(c.get("groq_fallbacks") or []) or "yok") + "."]
+    ek = [ad for ad in ("cloudflare", "openrouter", "cohere", "mistral", "sambanova") if _anahtar_var(ad)]
+    out.append("Hızlı ek yedekler (Groq dolunca, NVIDIA'dan önce): " + (", ".join(a.title() for a in ek) if ek else
+                                                                        "anahtar girilmemiş") + ".")
     nv = (c.get("nvidia") or {}).get("chat_models") or []
     out.append("NVIDIA yedeği: " + (", ".join(nv) if nv and _anahtar_var("nvidia") else
                                      ("tanımlı ama anahtar yok" if nv else "yok")) + ".")

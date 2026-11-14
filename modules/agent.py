@@ -155,6 +155,14 @@ def kendi_bilgisi(text):
             "olmayanı uydurma, 'emin değilim' de]\n" + r["message"])
 
 
+# İşlem defteri (v1.4): bu iki komut yapay zekâya sorulmadan defterden cevaplanır (kota harcamaz)
+NE_YAPTIN_RE = re.compile(r"\b(bugün|bu gün)\b.*\b(ne(ler)?|hangi işlem(ler)?i?)\b.*\b(yaptın|değiştirdin)\b|"
+                          r"işlem defter(i|imi|ini)?\b", re.IGNORECASE)
+GERI_AL_RE = re.compile(r"^\s*(?:(?:son|en son)\s+(?:yaptığın(?:ı)?|yaptığın şeyi|işlem(?:i)?|değişikliği)\s+)?"
+                        r"(?:(?P<id>[0-9a-f]{8})\s+(?:numaralı\s+)?(?:işlemi\s+)?)?geri al(?:ır mısın|abilir misin)?"
+                        r"[\s.!?]*$", re.IGNORECASE)
+
+
 SOHBET_OZET_RE = re.compile(
     r"\b(bu|şu|tüm|bütün)?\s*(sohbet|konuşma|konusma|muhabbet)(imiz|imizi|i|ı|u|yi|yı|leri|ları)?"
     r"(\s+\S+){0,3}?\s+(özetle|ozetle|özetler|özet(ini)? (çıkar|ver|yaz)|toparla)|"
@@ -757,6 +765,18 @@ class Agent:
             self._stage("Geçmişe kaydet")
             self.memory.add_note(note, source="user")
             return f"Notu geçmişe ekledim: {note}"
+
+        # 1a) İşlem defteri: "bugün ne yaptın?", "son yaptığını geri al"
+        if NE_YAPTIN_RE.search(user_text or "") and len(user_text or "") < 80:
+            from . import islem_defteri
+            return islem_defteri.ozet_metni()
+        m_geri = GERI_AL_RE.match(user_text or "")
+        if m_geri and mode_cfg.get("allow_actions", True) and mode_key != "safe":
+            from . import islem_defteri
+            r = islem_defteri.geri_al(m_geri.group("id"), onayla=fx._confirm)
+            if r.get("status") == "ok":
+                fx._notify(f"Geri alındı: {r.get('message')}")
+            return r.get("message") or "Geri alamadım."
 
         # 1b) Kısayol komutu ("çalışma modu" gibi kayıtlı çok adımlı komutlar)
         hit = macros.match(user_text)
