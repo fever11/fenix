@@ -9,9 +9,10 @@ Toplam süre yaklaşık **15 dakika**. Bilgisayar bilgisi gerekmez; adımları s
 | Bilgisayar | Windows 10 veya 11 |
 | Program | Python 3.12 (ücretsiz) |
 | Anahtar | Gemini API anahtarı (ücretsiz, zorunlu) |
-| İsteğe bağlı | Groq API anahtarı (ücretsiz; daha hızlı sohbet ve daha iyi ses tanıma) |
+| Anahtar | Groq API anahtarı (ücretsiz, zorunlu; hızlı sohbet ve ses tanıma) — https://console.groq.com/keys |
 | İsteğe bağlı | NVIDIA API anahtarı (ücretsiz; Groq dolunca yedek sohbet) — https://build.nvidia.com |
 | İsteğe bağlı | Tavily API anahtarı (ücretsiz aylık kota; daha iyi web araması) — https://app.tavily.com |
+| İsteğe bağlı | Cloudflare Workers AI token'ı + Account ID, OpenRouter, Cohere anahtarları (ücretsiz; Groq kotası dolunca yedek) |
 
 ## 1. FENIX'i indir
 
@@ -27,7 +28,7 @@ Toplam süre yaklaşık **15 dakika**. Bilgisayar bilgisi gerekmez; adımları s
 
 1. https://aistudio.google.com/apikey adresine Google hesabınla gir.
 2. **Create API key** → çıkan anahtarı kopyala. Bu anahtarı **kimseyle paylaşma**.
-3. (İsteğe bağlı) https://console.groq.com/keys adresinden bir Groq anahtarı da alabilirsin.
+3. https://console.groq.com/keys adresinden ücretsiz bir **Groq** anahtarı da al (zorunlu).
 
 ## 4. Kurulumu çalıştır
 
@@ -40,7 +41,7 @@ Toplam süre yaklaşık **15 dakika**. Bilgisayar bilgisi gerekmez; adımları s
 ## 5. FENIX'i başlat ve anahtarı yapıştır
 
 - Masaüstündeki **FENIX** simgesine çift tıkla.
-- İlk açılışta küçük bir **API anahtarı** penceresi çıkar: Gemini anahtarını yapıştır (Groq varsa onu da), **Kaydet ve başlat**'a bas. Dosya düzenlemen gerekmez.
+- İlk açılışta küçük bir **API anahtarları** penceresi çıkar: Gemini ve Groq anahtarlarını yapıştır (zorunlu). Altındaki **isteğe bağlı** bölüme istersen yedek anahtarları (Cloudflare, OpenRouter, Cohere, NVIDIA, Tavily) da yazabilirsin; her satırdaki **Anahtar al** düğmesi ilgili sayfayı açar. **Kaydet ve başlat**'a bas. Dosya düzenlemen gerekmez.
 - Dili sonra **⚙️ Ayarlar**'dan değiştirebilirsin.
 
 ## Kısa kullanım
@@ -51,6 +52,8 @@ Toplam süre yaklaşık **15 dakika**. Bilgisayar bilgisi gerekmez; adımları s
 | Sesli sohbet | **🎤 Bas-Konuş** düğmesi ya da **F9** |
 | Dosya / görsel ekleme | **📎**, sürükle-bırak ya da **Ctrl+V** |
 | Mod | **Güvenli** (sadece sohbet) · **Normal** (günlük işler, riskliyse sorar) · **Devil** (derin araştırma, rapor) |
+| Seçili metni gönder | Metni seç, **Numpad +** tuşunu basılı tut (tuş **⚙️ Ayarlar**'dan değiştirilebilir: Numpad -, F8, F10, F12, Pause) |
+| Günlük brifing | Sadece **günün ilk açılışında** bir kez gelir; içeriği **⚙️ Ayarlar → Günlük brifing ayarları**'ndan seçilir. Sohbette "brifing" yazınca da gösterilir |
 | Acil durdurma | **Ctrl+Alt+Q** ya da fareyi sol üst köşede 1,5 sn tut |
 
 FENIX riskli bir işlem (silme, kapatma, indirme vb.) yapmadan önce **her modda onay sorar**.

@@ -9,9 +9,10 @@ Takes about **15 minutes**. No technical knowledge needed; just follow the steps
 | Computer | Windows 10 or 11 |
 | Program | Python 3.12 (free) |
 | Key | Gemini API key (free, required) |
-| Optional | Groq API key (free; faster chat and better speech recognition) |
+| Key | Groq API key (free, required; fast chat and speech recognition) — https://console.groq.com/keys |
 | Optional | NVIDIA API key (free; backup chat when Groq runs out) — https://build.nvidia.com |
 | Optional | Tavily API key (free monthly quota; better web search) — https://app.tavily.com |
+| Optional | Cloudflare Workers AI token + Account ID, OpenRouter, Cohere keys (free; backups when the Groq quota runs out) |
 
 ## 1. Download FENIX
 
@@ -27,7 +28,7 @@ Takes about **15 minutes**. No technical knowledge needed; just follow the steps
 
 1. Go to https://aistudio.google.com/apikey and sign in with your Google account.
 2. **Create API key** → copy the key. **Never share** this key.
-3. (Optional) You can also get a Groq key at https://console.groq.com/keys.
+3. Also get a free **Groq** key at https://console.groq.com/keys (required).
 
 ## 4. Run the setup
 
@@ -40,7 +41,7 @@ Takes about **15 minutes**. No technical knowledge needed; just follow the steps
 ## 5. Start FENIX and paste your key
 
 - Double-click the **FENIX** icon on your desktop.
-- On first start a small **API key** window appears: paste your Gemini key (and Groq if you have one) and click **Save and start**. No file editing needed.
+- On first start a small **API keys** window appears: paste your Gemini and Groq keys (required). In the **optional** section below you can add backup keys (Cloudflare, OpenRouter, Cohere, NVIDIA, Tavily); each row's **Get key** button opens the right page. Click **Save and start**. No file editing needed.
 - You can change the language later in **⚙️ Settings**.
 
 ## Quick usage
@@ -51,6 +52,8 @@ Takes about **15 minutes**. No technical knowledge needed; just follow the steps
 | Voice chat | **🎤 Push-to-talk** button or **F9** |
 | Attach a file / image | **📎**, drag and drop, or **Ctrl+V** |
 | Mode | **Safe** (chat only) · **Normal** (everyday tasks, asks before risky ones) · **Devil** (deep research, reports) |
+| Send selected text | Select text and hold **Numpad +** (the key can be changed in **⚙️ Settings**: Numpad -, F8, F10, F12, Pause) |
+| Daily briefing | Shown once, only on the **first start of the day**; choose its contents in **⚙️ Settings → Daily briefing settings**. Typing "brifing" in the chat also shows it |
 | Emergency stop | **Ctrl+Alt+Q** or hold the mouse in the top-left corner for 1.5 s |
 
 FENIX **asks for approval in every mode** before risky actions (delete, shut down, download, etc.).

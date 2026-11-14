@@ -32,7 +32,7 @@ KATEGORI = [
      "(30 gün sonra kalıcı silinir). 'Ders notu çıkar' istekleri bölüm bölüm yazılır: uzunluk verilen kaynak "
      "miktarına göre artar, her kaynak parçası bir bölümde kullanılır, sonda Kendini Dene soruları ve özet olur"),
     ("Günlük brifing", [],
-     "Günün ilk açılışında saate göre selamlayıp seçilen bilgileri verir (hava, bugünkü hatırlatmalar, kur, haber); "
+     "Sadece günün İLK açılışında bir kez, saate göre selamlayıp seçilen bilgileri verir (hava, bugünkü hatırlatmalar, kur, haber); "
      "Ayarlar > Günlük brifing ayarları. Sohbette 'brifing' ya da 'günün özeti' yazınca da gösterilir; yapay zekâ "
      "kullanmaz"),
     ("Sistem paneli", [],
@@ -42,7 +42,8 @@ KATEGORI = [
     ("Sağ tık ve seçili metin", [],
      "Ayarlar'dan açılır: dosyaya/klasöre sağ tıklayınca 'FENIX' menüsü (Özetle, Çevir, Bu dosya güvenli mi?, PDF'e "
      "dönüştür, FENIX'e sor; Windows 11'de 'Daha fazla seçenek göster' altında). Herhangi bir uygulamada metni seçip "
-     "sayı tuş takımındaki + tuşunu basılı tutunca metin yan sohbete gelir (kısa basış + yazar)"),
+     "sayı tuş takımındaki + tuşunu basılı tutunca metin yan sohbete gelir (kısa basış + yazar). Tuş Ayarlar'dan "
+     "değiştirilebilir: Numpad +, Numpad -, F8, F10, F12, Pause"),
     ("İşlem defteri", ["action_log", "undo_action"],
      "FENIX'in bilgisayarda yaptığı her değişiklik deftere yazılır; 'bugün ne yaptın?' ile listelenir, 'son yaptığını "
      "geri al' ile geri alınır (silinen dosya yerine döner, oluşturulan kaldırılır, düzenlenen eski hâline döner)"),

@@ -219,12 +219,20 @@ class SettingsWindow(ReadOnlyWindow):
         if sag_tik.kurulu_mu():
             self.sw_sagtik.select()
         self.sw_sagtik.pack(anchor="w", pady=(6, 0))
-        self.sw_numpad = ctk.CTkSwitch(row2, text="➕ Seçili metni FENIX'e gönder: sayı tuş takımında \"+\" tuşunu basılı "
-                                                  "tut (kısa basış \"+\" yazar)", command=self._on_numpad,
+        self.sw_numpad = ctk.CTkSwitch(row2, text="➕ Seçili metni FENIX'e gönder: aşağıdaki tuşu basılı tut (kısa basış "
+                                                  "tuşun normal işini yapar)", command=self._on_numpad,
                                        font=("Segoe UI", 12), text_color=TEXT)
         if user_settings.get("numpad_arti", True):
             self.sw_numpad.select()
         self.sw_numpad.pack(anchor="w", pady=(6, 0))
+        tus_satir = ctk.CTkFrame(row2, fg_color="transparent")
+        tus_satir.pack(anchor="w", pady=(4, 0), padx=(46, 0))
+        ctk.CTkLabel(tus_satir, text="Kısayol tuşu:", font=("Segoe UI", 12), text_color=TEXT).pack(side="left")
+        self._tus_adlari = {v[0]: k for k, v in sag_tik.TUSLAR.items()}
+        self.om_tus = ctk.CTkOptionMenu(tus_satir, values=list(self._tus_adlari), command=self._on_tus, width=150,
+                                        font=("Segoe UI", 12))
+        self.om_tus.set(sag_tik.tus_adi())
+        self.om_tus.pack(side="left", padx=8)
         ctk.CTkButton(row2, text="📋 Günlük brifing ayarları (hava, hatırlatmalar, kur, haber)",
                       command=self._on_brifing, fg_color=PANEL2, hover_color=CYAN, text_color=TEXT, height=28,
                       font=("Segoe UI", 12), anchor="w").pack(anchor="w", pady=(8, 0))
@@ -248,6 +256,15 @@ class SettingsWindow(ReadOnlyWindow):
             self.app._numpad_ayarla(acik)
         except Exception as e:
             print(f"[SAĞ TIK] {e}")
+
+    def _on_tus(self, gorunen):
+        user_settings.set("kisayol_tusu", self._tus_adlari.get(gorunen, "numpad_arti"))
+        if self.sw_numpad.get():                         # dinleyici yeni tuşla yeniden başlar
+            try:
+                self.app._numpad_ayarla(False)
+                self.app._numpad_ayarla(True)
+            except Exception as e:
+                print(f"[KISAYOL] {e}")
 
     def _on_lang(self, name):
         code = self._codes[[i18n.LANGS[c] for c in self._codes].index(name)]
@@ -3691,6 +3708,20 @@ GEMINI_KEY_URL = "https://aistudio.google.com/apikey"
 GROQ_KEY_URL = "https://console.groq.com/keys"
 NVIDIA_KEY_URL = "https://build.nvidia.com/settings/api-keys"
 TAVILY_KEY_URL = "https://app.tavily.com/home"
+CLOUDFLARE_KEY_URL = "https://dash.cloudflare.com/profile/api-tokens"
+OPENROUTER_KEY_URL = "https://openrouter.ai/settings/keys"
+COHERE_KEY_URL = "https://dashboard.cohere.com/api-keys"
+
+# İlk açılış penceresindeki isteğe bağlı anahtarlar (v1.4): (config adı, etiket, ipucu, anahtar sayfası)
+ISTEGE_BAGLI_ANAHTARLAR = [
+    ("cloudflare", "Cloudflare Workers AI token'ı (Groq dolunca yedek; kart istemez)", "token", CLOUDFLARE_KEY_URL),
+    ("cloudflare_hesap", "Cloudflare Account ID (token'la birlikte gerekir; panelde sağda yazar)", "32 haneli kimlik",
+     "https://dash.cloudflare.com/"),
+    ("openrouter", "OpenRouter anahtarı (yedek; ücretsiz modeller)", "sk-or-v1-...", OPENROUTER_KEY_URL),
+    ("cohere", "Cohere deneme anahtarı (yedek; ayda 1.000 istek)", "anahtar", COHERE_KEY_URL),
+    ("nvidia", "NVIDIA anahtarı (son yedek; yavaş ama ücretsiz)", "nvapi-...", NVIDIA_KEY_URL),
+    ("tavily", "Tavily anahtarı (daha iyi web araması; aylık ücretsiz kota)", "tvly-...", TAVILY_KEY_URL),
+]
 
 
 def _key_missing(cfg):
@@ -3715,18 +3746,14 @@ def save_key(path, name, value):
         f.write(_put_key(text, name, value))
 
 
-def save_keys(path, gemini, groq="", nvidia="", tavily=""):
-    """Anahtarları config.yaml'a yazar; dosyadaki açıklamalar ve diğer ayarlar korunur."""
+def save_keys(path, gemini, groq="", nvidia="", tavily="", **diger):
+    """Anahtarları config.yaml'a yazar; dosyadaki açıklamalar ve diğer ayarlar korunur. Boş bırakılan yazılmaz."""
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    put = _put_key
-    text = put(text, "gemini", gemini)
-    if groq.strip():
-        text = put(text, "groq", groq)
-    if nvidia.strip():
-        text = put(text, "nvidia", nvidia)
-    if tavily.strip():
-        text = put(text, "tavily", tavily)
+    text = _put_key(text, "gemini", gemini)
+    for ad, deger in [("groq", groq), ("nvidia", nvidia), ("tavily", tavily)] + list(diger.items()):
+        if (deger or "").strip():
+            text = _put_key(text, ad, deger)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
 
@@ -3750,42 +3777,36 @@ def setup_keys_window(path="config.yaml"):
     done = {"ok": False, "force": False}
     win = ctk.CTk()
     win.title("FENIX • Kurulum")
-    win.geometry("520x660")
+    win.geometry("540x720")
     win.resizable(False, False)
     try:
         win.iconbitmap("fenix.ico")
     except Exception:
         pass
-    ctk.CTkLabel(win, text="🔑 API anahtarı", font=(FONT_HEAD, 20, "bold"), text_color="#f97316").pack(pady=(20, 6))
-    ctk.CTkLabel(win, text="FENIX'in çalışması için ücretsiz bir Gemini anahtarı gerekir. Anahtar yalnızca bu bilgisayarda "
-                           "(config.yaml) saklanır, kimseyle paylaşılmaz.",
-                 wraplength=460, justify="left").pack(padx=24, pady=(0, 10))
-    ctk.CTkButton(win, text="🌐 Ücretsiz Gemini anahtarı al", fg_color="#c2410c", hover_color="#ea580c",
-                  command=lambda: webbrowser.open(GEMINI_KEY_URL)).pack(pady=(0, 12))
-    ctk.CTkLabel(win, text="Gemini API anahtarı (zorunlu)", anchor="w").pack(fill="x", padx=24)
-    e_gem = ctk.CTkEntry(win, placeholder_text="AIza...", show="•", width=470)
-    e_gem.pack(padx=24, pady=(2, 10))
-    ctk.CTkLabel(win, text="Groq API anahtarı (isteğe bağlı: daha hızlı sohbet ve ses tanıma)", anchor="w").pack(fill="x", padx=24)
-    row = ctk.CTkFrame(win, fg_color="transparent")
-    row.pack(fill="x", padx=24, pady=(2, 6))
-    e_groq = ctk.CTkEntry(row, placeholder_text="gsk_...", show="•", width=330)
-    e_groq.pack(side="left")
-    ctk.CTkButton(row, text="Groq anahtarı al", width=130, fg_color="#374151",
-                  command=lambda: webbrowser.open(GROQ_KEY_URL)).pack(side="right")
-    ctk.CTkLabel(win, text="NVIDIA API anahtarı (isteğe bağlı: Groq dolunca yedek sohbet)", anchor="w").pack(fill="x", padx=24)
-    row2 = ctk.CTkFrame(win, fg_color="transparent")
-    row2.pack(fill="x", padx=24, pady=(2, 6))
-    e_nv = ctk.CTkEntry(row2, placeholder_text="nvapi-...", show="•", width=330)
-    e_nv.pack(side="left")
-    ctk.CTkButton(row2, text="NVIDIA anahtarı al", width=130, fg_color="#374151",
-                  command=lambda: webbrowser.open(NVIDIA_KEY_URL)).pack(side="right")
-    ctk.CTkLabel(win, text="Tavily API anahtarı (isteğe bağlı: daha iyi web araması, aylık ücretsiz kota)", anchor="w").pack(fill="x", padx=24)
-    row3 = ctk.CTkFrame(win, fg_color="transparent")
-    row3.pack(fill="x", padx=24, pady=(2, 6))
-    e_tav = ctk.CTkEntry(row3, placeholder_text="tvly-...", show="•", width=330)
-    e_tav.pack(side="left")
-    ctk.CTkButton(row3, text="Tavily anahtarı al", width=130, fg_color="#374151",
-                  command=lambda: webbrowser.open(TAVILY_KEY_URL)).pack(side="right")
+    ctk.CTkLabel(win, text="🔑 API anahtarları", font=(FONT_HEAD, 20, "bold"), text_color="#f97316").pack(pady=(16, 4))
+    ctk.CTkLabel(win, text="FENIX'in çalışması için iki ücretsiz anahtar gerekir: Gemini (ekranı görme, dosya okuma) ve "
+                           "Groq (hızlı sohbet, ses tanıma). Anahtarlar yalnızca bu bilgisayarda (config.yaml) saklanır, "
+                           "kimseyle paylaşılmaz.", wraplength=470, justify="left").pack(padx=24, pady=(0, 8))
+
+    def satir(ust, etiket, ipucu, url, genislik=330):
+        ctk.CTkLabel(ust, text=etiket, anchor="w", wraplength=460, justify="left").pack(fill="x", padx=(4, 0))
+        r = ctk.CTkFrame(ust, fg_color="transparent")
+        r.pack(fill="x", pady=(2, 6))
+        ent = ctk.CTkEntry(r, placeholder_text=ipucu, show="•", width=genislik)
+        ent.pack(side="left")
+        ctk.CTkButton(r, text="Anahtar al", width=110, fg_color="#374151",
+                      command=lambda: webbrowser.open(url)).pack(side="right")
+        return ent
+    zorunlu = ctk.CTkFrame(win, fg_color="transparent")
+    zorunlu.pack(fill="x", padx=20)
+    e_gem = satir(zorunlu, "Gemini API anahtarı (zorunlu)", "AIza...", GEMINI_KEY_URL)
+    e_groq = satir(zorunlu, "Groq API anahtarı (zorunlu)", "gsk_...", GROQ_KEY_URL)
+    ctk.CTkLabel(win, text="İsteğe bağlı: Groq'un ücretsiz kotası dolunca FENIX'in durmaması için yedekler. Boş "
+                           "bırakabilirsin; sonra config.yaml'a da yazabilirsin.", wraplength=470, justify="left",
+                 text_color="#9ca3af").pack(padx=24, pady=(4, 2))
+    istege = ctk.CTkScrollableFrame(win, height=190)
+    istege.pack(fill="x", padx=20, pady=(0, 4))
+    secmeli = {ad: satir(istege, etiket, ipucu, url, genislik=310) for ad, etiket, ipucu, url in ISTEGE_BAGLI_ANAHTARLAR}
     status = ctk.CTkLabel(win, text="", wraplength=460, justify="left", text_color="#fbbf24")
     status.pack(padx=24, pady=(8, 4))
     btn = ctk.CTkButton(win, text="Kaydet ve başlat", height=38, fg_color="#059669", hover_color="#10b981")
@@ -3793,7 +3814,7 @@ def setup_keys_window(path="config.yaml"):
     ctk.CTkButton(win, text="Vazgeç", fg_color="transparent", border_width=1, command=win.destroy).pack()
 
     def finish(gem, groq):
-        save_keys(path, gem, groq, e_nv.get().strip(), e_tav.get().strip())
+        save_keys(path, gem, groq, **{ad: ent.get().strip() for ad, ent in secmeli.items()})
         done["ok"] = True
         win.destroy()
 
@@ -3801,6 +3822,10 @@ def setup_keys_window(path="config.yaml"):
         gem, groq = e_gem.get().strip(), e_groq.get().strip()
         if len(gem) < 20:
             status.configure(text="Gemini anahtarını yapıştır (genellikle AIza ile başlar).")
+            return
+        if len(groq) < 20:
+            status.configure(text="Groq anahtarını yapıştır (genellikle gsk_ ile başlar). console.groq.com'dan "
+                                  "ücretsiz alınır.")
             return
         if done["force"]:
             finish(gem, groq)

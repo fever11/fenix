@@ -9,9 +9,10 @@ Environ **15 minutes**. Aucune connaissance technique requise ; suivez simplemen
 | Ordinateur | Windows 10 ou 11 |
 | Programme | Python 3.12 (gratuit) |
 | Clé | Clé API Gemini (gratuite, obligatoire) |
-| Facultatif | Clé API Groq (gratuite ; discussion plus rapide, meilleure reconnaissance vocale) |
+| Clé | Clé API Groq (gratuite, obligatoire ; discussion rapide et reconnaissance vocale) — https://console.groq.com/keys |
 | Facultatif | Clé API NVIDIA (gratuite ; discussion de secours quand Groq est épuisé) — https://build.nvidia.com |
 | Facultatif | Clé API Tavily (quota mensuel gratuit ; meilleure recherche web) — https://app.tavily.com |
+| Facultatif | Jeton Cloudflare Workers AI + Account ID, clés OpenRouter, Cohere (gratuites ; secours quand le quota Groq est épuisé) |
 
 ## 1. Télécharger FENIX
 
@@ -27,7 +28,7 @@ Environ **15 minutes**. Aucune connaissance technique requise ; suivez simplemen
 
 1. Allez sur https://aistudio.google.com/apikey et connectez-vous avec votre compte Google.
 2. **Create API key** → copiez la clé. **Ne la partagez jamais**.
-3. (Facultatif) Une clé Groq s'obtient sur https://console.groq.com/keys.
+3. Obtenez aussi une clé **Groq** gratuite sur https://console.groq.com/keys (obligatoire).
 
 ## 4. Lancer l'installation
 
@@ -40,7 +41,7 @@ Environ **15 minutes**. Aucune connaissance technique requise ; suivez simplemen
 ## 5. Démarrer FENIX et coller votre clé
 
 - Double-cliquez sur l'icône **FENIX** du bureau.
-- Au premier démarrage, une petite fenêtre **Clé API** s'ouvre : collez votre clé Gemini (et Groq si vous en avez une) puis cliquez sur **Enregistrer et démarrer**. Aucun fichier à modifier.
+- Au premier démarrage, une petite fenêtre **Clés API** s'ouvre : collez vos clés Gemini et Groq (obligatoires). Dans la partie **facultative** en dessous, vous pouvez ajouter des clés de secours (Cloudflare, OpenRouter, Cohere, NVIDIA, Tavily). Cliquez sur **Enregistrer et démarrer**. Aucun fichier à modifier.
 - Vous pourrez changer la langue dans **⚙️ Paramètres**.
 
 ## Utilisation rapide

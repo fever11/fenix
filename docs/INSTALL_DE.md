@@ -9,9 +9,10 @@ Dauer etwa **15 Minuten**. Keine Vorkenntnisse nötig; folge einfach den Schritt
 | Computer | Windows 10 oder 11 |
 | Programm | Python 3.12 (kostenlos) |
 | Schlüssel | Gemini-API-Schlüssel (kostenlos, erforderlich) |
-| Optional | Groq-API-Schlüssel (kostenlos; schnellerer Chat, bessere Spracherkennung) |
+| Schlüssel | Groq-API-Schlüssel (kostenlos, erforderlich; schneller Chat und Spracherkennung) — https://console.groq.com/keys |
 | Optional | NVIDIA-API-Schlüssel (kostenlos; Reserve-Chat, wenn Groq aufgebraucht ist) — https://build.nvidia.com |
 | Optional | Tavily-API-Schlüssel (kostenloses Monatskontingent; bessere Websuche) — https://app.tavily.com |
+| Optional | Cloudflare-Workers-AI-Token + Account ID, OpenRouter-, Cohere-Schlüssel (kostenlos; Reserve, wenn das Groq-Kontingent aufgebraucht ist) |
 
 ## 1. FENIX herunterladen
 
@@ -27,7 +28,7 @@ Dauer etwa **15 Minuten**. Keine Vorkenntnisse nötig; folge einfach den Schritt
 
 1. https://aistudio.google.com/apikey öffnen und mit dem Google-Konto anmelden.
 2. **Create API key** → Schlüssel kopieren. Den Schlüssel **niemals weitergeben**.
-3. (Optional) Einen Groq-Schlüssel gibt es unter https://console.groq.com/keys.
+3. Hole dir außerdem einen kostenlosen **Groq**-Schlüssel unter https://console.groq.com/keys (erforderlich).
 
 ## 4. Installation starten
 
@@ -40,7 +41,7 @@ Dauer etwa **15 Minuten**. Keine Vorkenntnisse nötig; folge einfach den Schritt
 ## 5. FENIX starten und Schlüssel einfügen
 
 - Doppelklick auf das **FENIX**-Symbol auf dem Desktop.
-- Beim ersten Start erscheint ein kleines Fenster **API-Schlüssel**: Gemini-Schlüssel (und ggf. Groq) einfügen, **Speichern und starten** klicken. Keine Datei bearbeiten nötig.
+- Beim ersten Start erscheint ein kleines Fenster **API-Schlüssel**: Gemini- und Groq-Schlüssel einfügen (erforderlich). Im Bereich **optional** darunter kannst du Reserve-Schlüssel eintragen (Cloudflare, OpenRouter, Cohere, NVIDIA, Tavily). **Speichern und starten** klicken. Keine Datei bearbeiten nötig.
 - Die Sprache lässt sich später unter **⚙️ Einstellungen** ändern.
 
 ## Kurze Bedienung

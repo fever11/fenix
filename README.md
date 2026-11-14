@@ -38,15 +38,15 @@ computer — always asking for approval before anything risky.
 - ⏰ Reminders, notes, daily summary, persistent memory
 - 🌙 Watch mode: a light tray process that warns about risky downloads, suspicious links, clipboard wallet swaps and startup changes
 - 📒 Action log with undo: every file FENIX creates, overwrites or deletes can be undone (deleted files go to FENIX's own trash for 30 days)
-- 🖱 Right-click menu (summarize, translate, "is this safe?", make PDF, ask FENIX) and Numpad + long-press to send selected text
+- 🖱 Right-click menu (summarize, translate, "is this safe?", make PDF, ask FENIX) and a long-press hotkey (Numpad + by default, changeable) to send selected text
 - 📊 System panel: CPU/RAM/disk/GPU/network gauges, top processes, battery health, health report, security events
-- ☀ Daily briefing on the first start of the day: weather for your cities, reminders, exchange rates, headlines, your own topics
+- ☀ Daily briefing, once on the first start of the day: weather for your cities, reminders, exchange rates, headlines, your own topics
 - 📚 Long, source-based study notes: written section by section, length grows with the sources you attach
 - 🔁 Backup AI providers (Cloudflare, OpenRouter, Cohere…) when the free Groq quota runs out
 - 🛑 Kill switch: Ctrl+Alt+Q or mouse in the top-left corner
 
-**Quick start:** get a free Gemini key → double-click `Setup.bat` (pick your language; it can install Python for you) →
-start FENIX from the desktop icon → paste the key into the window. No file editing. Step-by-step guide: [docs/INSTALL_EN.md](docs/INSTALL_EN.md).
+**Quick start:** get free Gemini and Groq keys (backup keys are optional) → double-click `Setup.bat` (pick your language; it can install Python for you) →
+start FENIX from the desktop icon → paste the keys into the window. No file editing. Step-by-step guide: [docs/INSTALL_EN.md](docs/INSTALL_EN.md).
 
 ## 🇹🇷 Türkçe
 
@@ -57,11 +57,11 @@ günlük işleri yapar — riskli her işlemden önce onay ister.
 **Özellikler:** sesli/yazılı sohbet (F9 Bas-Konuş) · ekran görme · PDF/Word/Excel/kod/görsel ekleme · Devil modunda
 derin araştırma ve rapor · onaylı sistem işlemleri · hatırlatma, not, gün özeti, kalıcı hafıza · nöbet modu (indirilen
 dosya, şüpheli link, cüzdan adresi değişimi, açılış programı uyarıları) · geri alınabilen işlem defteri · sağ tık menüsü
-ve Numpad + kısayolu · sistem paneli (CPU/RAM/disk/GPU göstergeleri, pil sağlığı, sağlık raporu) · günlük brifing · kaynağa
+ve seçili metin kısayolu (Numpad +, değiştirilebilir) · sistem paneli (CPU/RAM/disk/GPU göstergeleri, pil sağlığı, sağlık raporu) · günün ilk açılışında brifing · kaynağa
 göre uzayan ders notları · Groq kotası dolunca yedek yapay zekâ servisleri · acil kapatma (Ctrl+Alt+Q).
 
-**Hızlı başlangıç:** ücretsiz Gemini anahtarı al → `Setup.bat`'a çift tıkla (dilini seç; Python yoksa kendisi kurar) →
-masaüstündeki FENIX simgesiyle aç → anahtarı pencereye yapıştır. Dosya düzenlemek yok. Adım adım rehber: [docs/INSTALL_TR.md](docs/INSTALL_TR.md).
+**Hızlı başlangıç:** ücretsiz Gemini ve Groq anahtarlarını al (yedek anahtarlar isteğe bağlı) → `Setup.bat`'a çift tıkla (dilini seç; Python yoksa kendisi kurar) →
+masaüstündeki FENIX simgesiyle aç → anahtarları pencereye yapıştır. Dosya düzenlemek yok. Adım adım rehber: [docs/INSTALL_TR.md](docs/INSTALL_TR.md).
 
 ---
 

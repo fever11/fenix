@@ -1,6 +1,10 @@
 # Changelog / Değişiklik günlüğü
 
 ## 1.4.0 — 2026-11-14
+- **TR:** İlk açılış penceresi: Gemini ve Groq anahtarları zorunlu (ikisi de ücretsiz); altında kaydırılabilir
+  "isteğe bağlı" bölümde yedek anahtarlar (Cloudflare token + Account ID, OpenRouter, Cohere, NVIDIA, Tavily), her
+  satırda "Anahtar al" düğmesi. Boş bırakılanlar config.yaml'a yazılmaz. Kurulum rehberleri (6 dil) ve Setup.bat
+  mesajı buna göre güncellendi. Brifingin sadece günün ilk açılışında geldiği rehberde belirtildi.
 - **TR:** Kaynağa göre uzayan ders notları (Mustafa'nın isteği: "çok kaynak verirsek çok uzun bir ders notu çıkmalı,
   hiç eksik hissettirmemeli"). "Ders notu çıkar / kapsamlı not hazırla" istekleri bölüm bölüm yazılır: ekli kaynaklar
   parçalara ayrılır, bölüm sayısı kaynak miktarına göre belirlenir (6-30), her kaynak parçası mutlaka bir bölüme
@@ -37,7 +41,8 @@
   gerekmez), Ayarlar'dan tek tıkla kaldırılır. Windows 11'de "Daha fazla seçenek göster" altındadır.
 - **TR:** Seçili metin kısayolu: herhangi bir uygulamada metni seçip sayı tuş takımındaki "+" tuşunu basılı tutunca
   (~0,5 sn) metin yan sohbete gelir ve "bununla ne yapayım?" diye sorulur (boş Enter = açıkla). Kısa basış eskisi gibi
-  "+" yazar. Ana pencere ve Nöbet aynı anda açıksa kısayolu yalnızca biri dinler. Ayarlar'dan kapatılabilir.
+  "+" yazar. Ana pencere ve Nöbet aynı anda açıksa kısayolu yalnızca biri dinler. Ayarlar'dan kapatılabilir ve tuş
+  değiştirilebilir (Mustafa'nın isteği): Numpad +, Numpad -, F8, F10, F12, Pause (kısa basış tuşun normal işini yapar).
 - **TR:** İşlem defteri ve geri alma (Mustafa'nın fikri): FENIX'in bilgisayarda yaptığı her değişiklik (dosya
   oluşturma, üzerine yazma, düzenleme, silme, komut, açılıştan kaldırma) `data/islem_defteri.jsonl` dosyasına tek
   satır olarak yazılır. "Bugün ne yaptın?" listeyi, "son yaptığını geri al" ya da "<numara> geri al" geri almayı

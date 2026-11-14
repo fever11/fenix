@@ -68,8 +68,8 @@ class _Ev:
 
 def test_numpad_kisa_basis_arti_yazar(monkeypatch):
     yazilan, gonderilen = [], []
-    d = S.NumpadDinleyici(gonder=gonderilen.append, sure=0.3)
-    monkeypatch.setattr(S.NumpadDinleyici, "_arti_yaz", staticmethod(lambda: yazilan.append("+")))
+    d = S.NumpadDinleyici(gonder=gonderilen.append, sure=0.3, tus="numpad_arti")
+    monkeypatch.setattr(S.NumpadDinleyici, "_kisa_basis", lambda self: yazilan.append(self.karakter))
     assert d.olay(_Ev("down")) is False                 # tuş yutulur
     assert d.olay(_Ev("up")) is False
     time.sleep(0.05)
@@ -79,8 +79,8 @@ def test_numpad_kisa_basis_arti_yazar(monkeypatch):
 def test_numpad_uzun_basis_secili_metni_gonderir(monkeypatch):
     yazilan, gonderilen = [], []
     monkeypatch.setattr(S, "secili_metni_al", lambda: "seçili metin")
-    monkeypatch.setattr(S.NumpadDinleyici, "_arti_yaz", staticmethod(lambda: yazilan.append("+")))
-    d = S.NumpadDinleyici(gonder=gonderilen.append, sure=0.05)
+    monkeypatch.setattr(S.NumpadDinleyici, "_kisa_basis", lambda self: yazilan.append(self.karakter))
+    d = S.NumpadDinleyici(gonder=gonderilen.append, sure=0.05, tus="numpad_arti")
     d.olay(_Ev("down"))
     d.olay(_Ev("down"))                                 # tuş tekrarı: yok sayılır
     time.sleep(0.15)
@@ -90,7 +90,7 @@ def test_numpad_uzun_basis_secili_metni_gonderir(monkeypatch):
 
 
 def test_baska_tuslar_etkilenmez():
-    d = S.NumpadDinleyici(gonder=lambda m: None)
+    d = S.NumpadDinleyici(gonder=lambda m: None, tus="numpad_arti")
     assert d.olay(_Ev("down", kod=30)) is True
 
 
@@ -109,3 +109,21 @@ def test_kilit_ayni_anda_tek_dinleyici(tmp_path, monkeypatch):
     assert S._kilit_al(kilit) is True
     S._kilit_birak(kilit)
     assert not os.path.exists(kilit)
+
+
+def test_kisayol_tusu_degistirilebilir(monkeypatch):
+    from modules import user_settings
+    monkeypatch.setattr(user_settings, "get", lambda k, d=None: "f8" if k == "kisayol_tusu" else d)
+    d = S.NumpadDinleyici(gonder=lambda m: None)
+    assert d.tus == "f8" and d.kod == 66 and d.karakter is None
+    assert d.olay(_Ev("down")) is True                  # artık Numpad + yutulmaz
+    assert d.olay(_Ev("down", kod=66)) is False
+    monkeypatch.setattr(user_settings, "get", lambda k, d=None: "olmayan_tus" if k == "kisayol_tusu" else d)
+    assert S.tus_ayari() == "numpad_arti"
+
+
+def test_yeniden_gonderilen_tus_gecer():
+    d = S.NumpadDinleyici(gonder=lambda m: None, tus="f10")
+    d._gecir = 2
+    assert d.olay(_Ev("down", kod=68)) is True and d.olay(_Ev("up", kod=68)) is True
+    assert d.olay(_Ev("down", kod=68)) is False

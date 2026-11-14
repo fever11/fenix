@@ -186,6 +186,33 @@ def kaldir():
 UZUN_BASIS_SN = 0.5
 NUMPAD_ARTI = 78          # sayı tuş takımı "+" tuşunun tarama kodu
 
+# Kısayol tuşu Ayarlar'dan seçilir (v1.4, Mustafa: "+ isteğe göre değiştirilebilsin").
+# ad -> (görünen ad, tarama kodu, kısa basışta yazılacak karakter; None = tuşun kendisi yeniden gönderilir)
+# Numpad * listede yok: tarama kodu Print Screen ile aynı. F9 Bas-Konuş'a ayrılmış.
+TUSLAR = {
+    "numpad_arti": ("Numpad +", 78, "+"),
+    "numpad_eksi": ("Numpad -", 74, "-"),
+    "f8": ("F8", 66, None),
+    "f10": ("F10", 68, None),
+    "f12": ("F12", 88, None),
+    "pause": ("Pause / Break", 69, None),
+}
+VARSAYILAN_TUS = "numpad_arti"
+
+
+def tus_ayari():
+    """Ayarlarda seçili kısayol tuşu -> ad"""
+    try:
+        from . import user_settings
+        ad = user_settings.get("kisayol_tusu", VARSAYILAN_TUS)
+    except Exception:
+        ad = VARSAYILAN_TUS
+    return ad if ad in TUSLAR else VARSAYILAN_TUS
+
+
+def tus_adi(ad=None):
+    return TUSLAR[ad or tus_ayari()][0]
+
 
 def secili_metni_al(bekle=0.6):
     """Seçili metni Ctrl+C ile alır, panonun eski metnini geri koyar. Pano değişmezse (seçim yok) ''."""
@@ -243,9 +270,12 @@ def _pano_yaz(metin):
 class NumpadDinleyici:
     """Sayı tuş takımındaki '+' tuşu: kısa basış '+' yazar, basılı tutmak seçili metni yan sohbete gönderir."""
 
-    def __init__(self, gonder=None, sure=UZUN_BASIS_SN):
+    def __init__(self, gonder=None, sure=UZUN_BASIS_SN, tus=None):
         self.gonder = gonder or self._varsayilan_gonder
         self.sure = sure
+        self.tus = tus if tus in TUSLAR else tus_ayari()
+        _, self.kod, self.karakter = TUSLAR[self.tus]
+        self._gecir = 0                                  # kendi gönderdiğimiz tuş olayları (kısa basış) geçsin
         self._basildi = None
         self._tetiklendi = False
         self._hook = None
@@ -259,7 +289,10 @@ class NumpadDinleyici:
 
     def olay(self, ev):
         """keyboard kancası: True = tuş olayını geçir, False = yut."""
-        if getattr(ev, "scan_code", None) != NUMPAD_ARTI:
+        if getattr(ev, "scan_code", None) != self.kod:
+            return True
+        if self._gecir > 0:                              # F8 gibi tuşlarda kısa basışın yeniden gönderilen hâli
+            self._gecir -= 1
             return True
         if ev.event_type == "down":
             if self._basildi is None:                    # ilk basış (tuş tekrarları yok sayılır)
@@ -275,16 +308,20 @@ class NumpadDinleyici:
         kisa = not self._tetiklendi
         self._basildi = None
         if kisa:
-            threading.Thread(target=self._arti_yaz, daemon=True).start()
+            threading.Thread(target=self._kisa_basis, daemon=True).start()
         return False
 
-    @staticmethod
-    def _arti_yaz():
+    def _kisa_basis(self):
+        """Kısa basış tuşun normal işini yapar: Numpad +/- karakteri yazar, F8/F10/F12/Pause tuşu yeniden gönderilir."""
         try:
             import keyboard
-            keyboard.write("+")                           # tarama kodu 0 ile gönderilir, kanca tekrar yakalamaz
+            if self.karakter:
+                keyboard.write(self.karakter)             # tarama kodu 0 ile gönderilir, kanca tekrar yakalamaz
+            else:
+                self._gecir = 2                           # basma + bırakma
+                keyboard.send(self.kod)
         except Exception:
-            pass
+            self._gecir = 0
 
     def _uzun_basis(self):
         self._tetiklendi = True
@@ -306,8 +343,8 @@ class NumpadDinleyici:
             return False
         try:
             import keyboard
-            self._hook = keyboard.hook_key(NUMPAD_ARTI, self.olay, suppress=True)
-            _kayit(f"Numpad + kısayolu dinleniyor (işlem {os.getpid()})")
+            self._hook = keyboard.hook_key(self.kod, self.olay, suppress=True)
+            _kayit(f"{tus_adi(self.tus)} kısayolu dinleniyor (işlem {os.getpid()})")
             return True
         except Exception as e:
             _kayit(f"Numpad + kısayolu başlatılamadı: {type(e).__name__}: {e}")

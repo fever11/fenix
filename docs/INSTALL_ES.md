@@ -9,9 +9,10 @@ Unos **15 minutos**. No hace falta saber de informática; sigue los pasos en ord
 | Equipo | Windows 10 u 11 |
 | Programa | Python 3.12 (gratis) |
 | Clave | Clave de API de Gemini (gratis, obligatoria) |
-| Opcional | Clave de API de Groq (gratis; chat más rápido y mejor reconocimiento de voz) |
+| Clave | Clave de API de Groq (gratis, obligatoria; chat rápido y reconocimiento de voz) — https://console.groq.com/keys |
 | Opcional | Clave de API de NVIDIA (gratis; chat de respaldo cuando Groq se agota) — https://build.nvidia.com |
 | Opcional | Clave de API de Tavily (cuota mensual gratuita; mejor búsqueda web) — https://app.tavily.com |
+| Opcional | Token de Cloudflare Workers AI + Account ID, claves de OpenRouter, Cohere (gratis; respaldo cuando se agota la cuota de Groq) |
 
 ## 1. Descarga FENIX
 
@@ -27,7 +28,7 @@ Unos **15 minutos**. No hace falta saber de informática; sigue los pasos en ord
 
 1. Entra en https://aistudio.google.com/apikey con tu cuenta de Google.
 2. **Create API key** → copia la clave. **No la compartas nunca**.
-3. (Opcional) Puedes conseguir una clave de Groq en https://console.groq.com/keys.
+3. Consigue también una clave gratuita de **Groq** en https://console.groq.com/keys (obligatoria).
 
 ## 4. Ejecuta la instalación
 
@@ -40,7 +41,7 @@ Unos **15 minutos**. No hace falta saber de informática; sigue los pasos en ord
 ## 5. Inicia FENIX y pega tu clave
 
 - Haz doble clic en el icono **FENIX** del escritorio.
-- En el primer inicio aparece una pequeña ventana **Clave de API**: pega tu clave de Gemini (y la de Groq si tienes) y pulsa **Guardar e iniciar**. No hace falta editar archivos.
+- En el primer inicio aparece una pequeña ventana **Claves de API**: pega tus claves de Gemini y Groq (obligatorias). En la parte **opcional** de abajo puedes añadir claves de respaldo (Cloudflare, OpenRouter, Cohere, NVIDIA, Tavily). Pulsa **Guardar e iniciar**. No hace falta editar archivos.
 - Puedes cambiar el idioma luego en **⚙️ Ajustes**.
 
 ## Uso rápido
